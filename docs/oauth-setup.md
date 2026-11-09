@@ -110,24 +110,31 @@ QQ 网页扫码或 QQ 快速登录只代表网页会话，不等于 IMAP/SMTP �
 
 ## 构建示例
 
+发布构建统一走 `tool/release.dart`，它会固定使用 release、拆分符号并（Android APK）
+按 ABI 拆分；OAuth 参数原样转发：
+
 ```sh
 # Android：Gmail 使用 Google Play Services，不需要内置 Google Client ID
-flutter build apk --release --no-pub
+dart run tool/release.dart android
 
 # Android 同时启用 Microsoft 登录时，只注入 Microsoft public client ID
-flutter build apk --release --no-pub \
+dart run tool/release.dart android \
   --dart-define=OUTLOOK_OAUTH_CLIENT_ID=00000000-0000-0000-0000-000000000000
 
 # macOS：Gmail 桌面 + Outlook
-flutter build macos --release --no-pub \
+dart run tool/release.dart macos \
   --dart-define=GMAIL_OAUTH_DESKTOP_CLIENT_ID=xxxx.apps.googleusercontent.com \
   --dart-define=OUTLOOK_OAUTH_CLIENT_ID=00000000-0000-0000-0000-000000000000
 
-# iOS（需要 macOS + Xcode 签名；未在本机验证）
-flutter build ios --release --no-pub \
+# iOS（需要 macOS + Xcode 签名；本机尚未验证）
+dart run tool/release.dart ios \
   --dart-define=GMAIL_OAUTH_IOS_CLIENT_ID=yyyy.apps.googleusercontent.com \
   --dart-define=OUTLOOK_OAUTH_CLIENT_ID=00000000-0000-0000-0000-000000000000
 ```
+
+也可以使用 `--dart-define-from-file=oauth.env` 保存非密钥配置；不要把
+`client_secret` 放进应用，OAuth 公共客户端不需要它。符号目录和体积口径见
+[`release-build.md`](release-build.md)。
 
 兼容旧构建脚本：`GMAIL_OAUTH_CLIENT_ID` 仍作为桌面 Gmail Client ID 的备用参数读取，
 但只建议新构建使用 `GMAIL_OAUTH_DESKTOP_CLIENT_ID`。

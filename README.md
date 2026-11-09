@@ -41,9 +41,20 @@ Android 安装 Android Studio、Android SDK 和 Command-line Tools 后，在项�
 
 ```sh
 flutter pub get
-flutter build apk --release
+dart run tool/release.dart android
 ```
 
-APK 输出到 `build/app/outputs/flutter-apk/app-release.apk`。首次构建会下载 Gradle、NDK 和插件所需的 SDK 组件；缺少许可时运行 `flutter doctor --android-licenses`。当前 release 使用本机 debug 密钥签名，可用于个人安装；正式分发前需配置自己的签名密钥，并保留该密钥以支持后续覆盖更新。
+发布构建默认按 ABI 拆分 APK，输出到 `build/app/outputs/flutter-apk/`：
+
+- `app-armeabi-v7a-release.apk`
+- `app-arm64-v8a-release.apk`
+- `app-x86_64-release.apk`
+
+设备只需安装对应 ABI 的一个包。商店包使用 `dart run tool/release.dart appbundle`。
+脚本同时把 Dart 符号写到 `build/symbols/<target>/<UTC 时间戳>/`，该目录必须随
+版本归档；不要只保留构建产物。所有平台的命令、体积口径、split versionCode 覆盖
+更新风险和符号保存方式见 [`docs/release-build.md`](docs/release-build.md)。
+
+首次构建会下载 Gradle、NDK 和插件所需的 SDK 组件；缺少许可时运行 `flutter doctor --android-licenses`。当前 release 使用本机 debug 密钥签名，可用于个人安装；正式分发前需配置自己的签名密钥，并保留该密钥以支持后续覆盖更新。不要发布旧 universal APK：它的 versionCode 低于 split 包，会被已安装 split 包的设备视为降级。
 
 邮件正文数据库未加密，隐私保护依赖设备与操作系统。移动端后台释放连接后，不提供持续后台推送提醒。
