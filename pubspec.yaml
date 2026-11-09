@@ -48,9 +48,12 @@ dependencies:
   http: ^1.6.0
   flutter_web_auth_2: ^5.1.0
   url_launcher: ^6.3.3
+  # shortcut: keep the Groovy Android build until plugins support the new AGP DSL.
+  url_launcher_android: 6.3.28
   flutter_widget_from_html_core: ^0.17.4
   html: ^0.15.7
-  flutter_inappwebview: ^6.1.5
+  # Stable 6.1.5 uses a ProGuard default removed by AGP 9; pin the upstream fix.
+  flutter_inappwebview: 6.2.0-beta.3
   file_picker: ^13.3.2
   open_filex: ^5.0.0
   intl: ^0.20.3

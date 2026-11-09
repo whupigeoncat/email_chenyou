@@ -25,4 +25,13 @@ flutter build macos --debug --no-pub
 
 数据库版本为 6，支持从旧版本保留数据升级。原生构建还需要对应平台的 SDK；iOS 真机安装需要签名，Windows 构建需要 Windows 环境。
 
+Android 安装 Android Studio、Android SDK 和 Command-line Tools 后，在项目根目录执行：
+
+```sh
+flutter pub get
+flutter build apk --release
+```
+
+APK 输出到 `build/app/outputs/flutter-apk/app-release.apk`。首次构建会下载 Gradle、NDK 和插件所需的 SDK 组件；缺少许可时运行 `flutter doctor --android-licenses`。当前 release 使用本机 debug 密钥签名，可用于个人安装；正式分发前需配置自己的签名密钥，并保留该密钥以支持后续覆盖更新。
+
 邮件正文数据库未加密，隐私保护依赖设备与操作系统。移动端后台释放连接后，不提供持续后台推送提醒。
