@@ -170,50 +170,54 @@ void main() {
       },
     );
 
-    test('deleteAccount removes outbox attachment files after DB cascade',
-        () async {
-      final account = await repository.addAccount(
-        draft: buildDraft(email: 'carol@163.com'),
-        credential: const PasswordAccountCredential('delete-attachments'),
-      );
-      final root = await Directory.systemTemp.createTemp('auth_outbox_');
-      addTearDown(() => root.delete(recursive: true));
-      final file = File(
-        '${root.path}/mail_outbox_attachments/${account.id}/note.txt',
-      );
-      await file.parent.create(recursive: true);
-      await file.writeAsString('outbox data');
-      final store = AttachmentStore(rootProvider: () async => root);
-      final withCleanup = AuthRepositoryImpl(
-        database: database,
-        secureStorage: storage,
-        connectionPool: pool,
-        cleanupOutboxAttachments: store.cleanupPaths,
-      );
-      await database.into(database.dbOutboxMessages).insert(
-            DbOutboxMessagesCompanion.insert(
-              id: 'outbox-delete',
-              accountId: account.id,
-              mode: 'newMail',
-              toRecipientsJson: '[]',
-              ccJson: '[]',
-              bccJson: '[]',
-              subject: 'attachment draft',
-              plainBody: 'body',
-              attachmentsJson:
-                  '[{"fileName":"note.txt","mimeType":"text/plain",'
-                  '"localPath":"${file.path}","sizeBytes":10}]',
-              status: 'draft',
-              createdAt: 1,
-              updatedAt: 1,
-            ),
-          );
+    test(
+      'deleteAccount removes outbox attachment files after DB cascade',
+      () async {
+        final account = await repository.addAccount(
+          draft: buildDraft(email: 'carol@163.com'),
+          credential: const PasswordAccountCredential('delete-attachments'),
+        );
+        final root = await Directory.systemTemp.createTemp('auth_outbox_');
+        addTearDown(() => root.delete(recursive: true));
+        final file = File(
+          '${root.path}/mail_outbox_attachments/${account.id}/note.txt',
+        );
+        await file.parent.create(recursive: true);
+        await file.writeAsString('outbox data');
+        final store = AttachmentStore(rootProvider: () async => root);
+        final withCleanup = AuthRepositoryImpl(
+          database: database,
+          secureStorage: storage,
+          connectionPool: pool,
+          cleanupOutboxAttachments: store.cleanupPaths,
+        );
+        await database
+            .into(database.dbOutboxMessages)
+            .insert(
+              DbOutboxMessagesCompanion.insert(
+                id: 'outbox-delete',
+                accountId: account.id,
+                mode: 'newMail',
+                toRecipientsJson: '[]',
+                ccJson: '[]',
+                bccJson: '[]',
+                subject: 'attachment draft',
+                plainBody: 'body',
+                attachmentsJson:
+                    '[{"fileName":"note.txt","mimeType":"text/plain",'
+                    '"localPath":"${file.path}","sizeBytes":10}]',
+                status: 'draft',
+                createdAt: 1,
+                updatedAt: 1,
+              ),
+            );
 
-      await withCleanup.deleteAccount(account.id);
+        await withCleanup.deleteAccount(account.id);
 
-      expect(await database.select(database.dbOutboxMessages).get(), isEmpty);
-      expect(file.existsSync(), isFalse);
-    });
+        expect(await database.select(database.dbOutboxMessages).get(), isEmpty);
+        expect(file.existsSync(), isFalse);
+      },
+    );
 
     test(
       'deleteAccount keeps credentials when metadata deletion fails',
@@ -230,6 +234,59 @@ void main() {
         );
 
         expect(storage.passwordSecrets[account.id], 'keep-me');
+      },
+    );
+  });
+
+  group('AuthRepositoryImpl secret normalization', () {
+    test(
+      'QQ replacement trims pasted whitespace and persists 16 characters',
+      () async {
+        final account = await repository.addAccount(
+          draft: buildDraft(email: 'dave@qq.com'),
+          credential: const PasswordAccountCredential('1234567890abcdef'),
+        );
+
+        await repository.replaceCredential(
+          account.id,
+          const PasswordAccountCredential(' 1234567890abcdef \n'),
+        );
+
+        expect(storage.passwordSecrets[account.id], '1234567890abcdef');
+      },
+    );
+
+    test('QQ short code is rejected at the repository boundary', () async {
+      final account = await repository.addAccount(
+        draft: buildDraft(email: 'dave@qq.com'),
+        credential: const PasswordAccountCredential('1234567890abcdef'),
+      );
+
+      await expectLater(
+        repository.replaceCredential(
+          account.id,
+          const PasswordAccountCredential('qq-password'),
+        ),
+        throwsA(
+          isA<AuthFailure>().having(
+            (e) => e.userMessage,
+            'message',
+            contains('16 位客户端授权码'),
+          ),
+        ),
+      );
+      expect(storage.passwordSecrets[account.id], '1234567890abcdef');
+    });
+
+    test(
+      'non-Tencent passwords keep spaces and are not globally trimmed',
+      () async {
+        final account = await repository.addAccount(
+          draft: buildDraft(email: 'carol@163.com'),
+          credential: const PasswordAccountCredential(' pass with space '),
+        );
+
+        expect(storage.passwordSecrets[account.id], ' pass with space ');
       },
     );
   });

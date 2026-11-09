@@ -20,6 +20,10 @@
 				<string>com.localmail.client</string>
 			</array>
 		</dict>
+		<!-- Google iOS OAuth needs the reversed client ID scheme, for example
+		     com.googleusercontent.apps.1234567890-abc. Register the client in
+		     docs/oauth-setup.md and add a CFBundleURLSchemes entry here before
+		     building with GMAIL_OAUTH_IOS_CLIENT_ID. -->
 	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>

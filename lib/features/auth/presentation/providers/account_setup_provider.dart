@@ -28,7 +28,6 @@ class AccountSetupState {
     this.colorValue = 0xFF10B981,
     this.passwordOrAuthCode = '',
     this.oauthTokens,
-    this.oauthClientId = '',
     this.isOAuthAuthorizing = false,
     this.imapHost = '',
     this.imapPort = 993,
@@ -52,7 +51,6 @@ class AccountSetupState {
   final int colorValue;
   final String passwordOrAuthCode;
   final OAuthTokenBundle? oauthTokens;
-  final String oauthClientId;
   final bool isOAuthAuthorizing;
   final String imapHost;
   final int imapPort;
@@ -95,7 +93,6 @@ class AccountSetupState {
     int? colorValue,
     String? passwordOrAuthCode,
     Object? oauthTokens = _unset,
-    String? oauthClientId,
     bool? isOAuthAuthorizing,
     String? imapHost,
     int? imapPort,
@@ -121,7 +118,6 @@ class AccountSetupState {
       oauthTokens: identical(oauthTokens, _unset)
           ? this.oauthTokens
           : oauthTokens as OAuthTokenBundle?,
-      oauthClientId: oauthClientId ?? this.oauthClientId,
       isOAuthAuthorizing: isOAuthAuthorizing ?? this.isOAuthAuthorizing,
       imapHost: imapHost ?? this.imapHost,
       imapPort: imapPort ?? this.imapPort,
@@ -150,10 +146,16 @@ class AccountSetupState {
 
 @riverpod
 class AccountSetup extends _$AccountSetup {
+  /// Incremented whenever the account identity/auth mode changes or a new
+  /// authorization starts. A late result from an older request must never be
+  /// written into the newer form state.
+  int _oauthRequestVersion = 0;
+
   @override
   AccountSetupState build() => const AccountSetupState();
 
   void updateEmail(String value) {
+    _oauthRequestVersion++;
     final preset = ProviderPresets.inferFromEmail(value);
     final providerChanged = preset.type != state.providerType;
     var authType = state.authType;
@@ -164,10 +166,6 @@ class AccountSetup extends _$AccountSetup {
     // Keep manual custom-host edits intact until a known provider is detected.
     final applyPresetHosts =
         preset.type != MailProviderType.custom || providerChanged;
-    final clientId = providerChanged
-        ? (OAuthPkceService.defaultClientIdFor(preset.type) ?? '')
-        : state.oauthClientId;
-
     state = state.copyWith(
       email: value,
       providerType: preset.type,
@@ -187,8 +185,8 @@ class AccountSetup extends _$AccountSetup {
       smtpImplicitTls: applyPresetHosts
           ? preset.smtpImplicitTls
           : state.smtpImplicitTls,
-      oauthClientId: clientId,
       oauthTokens: null,
+      isOAuthAuthorizing: false,
       testStatus: ConnectionTestStatus.idle,
       testMessage: null,
       saveStatus: AccountSaveStatus.idle,
@@ -208,8 +206,10 @@ class AccountSetup extends _$AccountSetup {
 
   void selectAuthType(MailAuthType authType) {
     if (!state.preset.supportedAuthTypes.contains(authType)) return;
+    _oauthRequestVersion++;
     state = state.copyWith(
       authType: authType,
+      isOAuthAuthorizing: false,
       testStatus: ConnectionTestStatus.idle,
       testMessage: null,
       errorMessage: null,
@@ -227,10 +227,6 @@ class AccountSetup extends _$AccountSetup {
       saveStatus: AccountSaveStatus.idle,
       saveMessage: null,
     );
-  }
-
-  void updateOAuthClientId(String value) {
-    state = state.copyWith(oauthClientId: value, errorMessage: null);
   }
 
   void toggleAdvanced() {
@@ -266,6 +262,7 @@ class AccountSetup extends _$AccountSetup {
   }
 
   Future<void> startOAuthAuthorization() async {
+    if (state.isOAuthAuthorizing) return;
     if (!state.supportsOAuth) {
       state = state.copyWith(
         errorMessage: '${state.preset.displayName} 不支持 OAuth 2.0 登录。',
@@ -276,11 +273,17 @@ class AccountSetup extends _$AccountSetup {
       state = state.copyWith(errorMessage: '请先填写有效的邮箱地址。');
       return;
     }
-    if (state.oauthClientId.trim().isEmpty) {
-      state = state.copyWith(errorMessage: '请先填写 OAuth 客户端 ID（Client ID）。');
+    final requestEmail = state.email.trim();
+    final requestProvider = state.providerType;
+    final oauthService = ref.read(oauthPkceServiceProvider);
+    if (!oauthService.isConfiguredFor(requestProvider)) {
+      state = state.copyWith(
+        errorMessage: oauthService.unavailableMessageFor(requestProvider),
+      );
       return;
     }
 
+    final requestVersion = ++_oauthRequestVersion;
     state = state.copyWith(
       isOAuthAuthorizing: true,
       errorMessage: null,
@@ -289,14 +292,12 @@ class AccountSetup extends _$AccountSetup {
     );
 
     try {
-      final tokens = await ref
-          .read(oauthPkceServiceProvider)
-          .authorize(
-            providerType: state.providerType,
-            clientId: state.oauthClientId.trim(),
-            loginHintEmail: state.email.trim(),
-          );
-      if (!ref.mounted) return;
+      final tokens = await oauthService.authorize(
+        providerType: requestProvider,
+        expectedEmail: requestEmail,
+        loginHintEmail: requestEmail,
+      );
+      if (!ref.mounted || requestVersion != _oauthRequestVersion) return;
       state = state.copyWith(
         oauthTokens: tokens,
         isOAuthAuthorizing: false,
@@ -307,13 +308,13 @@ class AccountSetup extends _$AccountSetup {
         errorMessage: null,
       );
     } on AppFailure catch (failure) {
-      if (!ref.mounted) return;
+      if (!ref.mounted || requestVersion != _oauthRequestVersion) return;
       state = state.copyWith(
         isOAuthAuthorizing: false,
         errorMessage: failure.userMessage,
       );
     } catch (error) {
-      if (!ref.mounted) return;
+      if (!ref.mounted || requestVersion != _oauthRequestVersion) return;
       state = state.copyWith(
         isOAuthAuthorizing: false,
         errorMessage:
@@ -437,11 +438,23 @@ class AccountSetup extends _$AccountSetup {
     if (!requireTestableCredential) return null;
 
     if (state.authType == MailAuthType.passwordOrAuthCode) {
-      if (state.passwordOrAuthCode.isEmpty) {
-        return '请填写客户端授权码（不是网页登录密码）。';
-      }
+      final secretError = ProviderPresets.validateAuthorizationSecret(
+        state.providerType,
+        state.passwordOrAuthCode,
+      );
+      if (secretError != null) return secretError;
     } else {
-      if (state.oauthTokens == null) return '请先完成 OAuth 2.0 授权登录。';
+      final tokens = state.oauthTokens;
+      if (tokens == null) return '请先完成 OAuth 2.0 授权登录。';
+      final boundEmail = tokens.accountEmail;
+      if (boundEmail != null &&
+          !OAuthPkceService.emailsMatchForProvider(
+            state.providerType,
+            state.email,
+            boundEmail,
+          )) {
+        return 'OAuth 授权账号与填写的邮箱不一致，请重新登录正确的账户。';
+      }
     }
     return null;
   }
@@ -480,6 +493,11 @@ class AccountSetup extends _$AccountSetup {
       }
       return OAuthAccountCredential(tokens);
     }
-    return PasswordAccountCredential(state.passwordOrAuthCode);
+    return PasswordAccountCredential(
+      ProviderPresets.normalizeAuthorizationSecret(
+        state.providerType,
+        state.passwordOrAuthCode,
+      ),
+    );
   }
 }

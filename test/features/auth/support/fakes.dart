@@ -64,21 +64,38 @@ class InMemorySecureStorageService extends SecureStorageService {
 }
 
 class FakeOAuthPkceService extends OAuthPkceService {
-  FakeOAuthPkceService({this.refreshDelay = Duration.zero});
+  FakeOAuthPkceService({
+    this.refreshDelay = Duration.zero,
+    this.configured = true,
+  });
 
   final Duration refreshDelay;
+  final bool configured;
   int refreshCount = 0;
+  int deviceRefreshCount = 0;
   int authorizeCount = 0;
   Object? authorizeError;
   OAuthTokenBundle? authorizeResult;
+  String? lastExpectedEmail;
+  final List<String> deviceRefreshEmails = <String>[];
+
+  @override
+  bool isConfiguredFor(MailProviderType provider) => configured;
+
+  @override
+  String unavailableMessageFor(MailProviderType provider) =>
+      provider == MailProviderType.gmail
+      ? '此构建未配置 Google 登录。'
+      : '此构建未配置 Microsoft 登录。';
 
   @override
   Future<OAuthTokenBundle> authorize({
     required MailProviderType providerType,
-    required String clientId,
+    String? expectedEmail,
     String? loginHintEmail,
   }) async {
     authorizeCount++;
+    lastExpectedEmail = expectedEmail ?? loginHintEmail;
     final error = authorizeError;
     if (error != null) throw error;
     return authorizeResult ??
@@ -86,9 +103,10 @@ class FakeOAuthPkceService extends OAuthPkceService {
           accessToken: 'authorized-access-token',
           refreshToken: 'authorized-refresh-token',
           expiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
-          clientId: clientId,
+          clientId: 'test-client-id',
           tokenEndpoint: 'https://oauth.example.invalid/token',
           scopes: const ['mail'],
+          accountEmail: expectedEmail ?? loginHintEmail,
         );
   }
 
@@ -105,6 +123,29 @@ class FakeOAuthPkceService extends OAuthPkceService {
       clientId: current.clientId,
       tokenEndpoint: current.tokenEndpoint,
       scopes: current.scopes,
+      accountEmail: current.accountEmail,
+    );
+  }
+
+  @override
+  Future<OAuthTokenBundle> refreshDeviceAuthorization({
+    required MailProviderType providerType,
+    required OAuthTokenBundle current,
+  }) async {
+    deviceRefreshCount++;
+    deviceRefreshEmails.add(current.accountEmail ?? '');
+    if (refreshDelay > Duration.zero) {
+      await Future<void>.delayed(refreshDelay);
+    }
+    return OAuthTokenBundle(
+      accessToken: 'device-refreshed-token-$deviceRefreshCount',
+      refreshToken: null,
+      expiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
+      clientId: '',
+      tokenEndpoint: '',
+      scopes: current.scopes,
+      accountEmail: current.accountEmail,
+      deviceAuthorization: true,
     );
   }
 }
@@ -142,8 +183,7 @@ class FakeImapClient extends ImapClient {
           ..capabilities = <Capability>[
             if (startTlsSupported)
               const Capability(ImapServerInfo.capabilityStartTls),
-            if (supportsIdle)
-              const Capability(ImapServerInfo.capabilityIdle),
+            if (supportsIdle) const Capability(ImapServerInfo.capabilityIdle),
           ];
   }
 

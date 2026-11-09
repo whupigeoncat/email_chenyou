@@ -23,6 +23,25 @@ OAuthTokenBundle _bundle({
   );
 }
 
+OAuthTokenBundle _deviceBundle({
+  required String email,
+  required String accessToken,
+  DateTime? expiresAt,
+}) {
+  return OAuthTokenBundle(
+    accessToken: accessToken,
+    refreshToken: null,
+    expiresAt:
+        expiresAt ??
+        DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
+    clientId: '',
+    tokenEndpoint: '',
+    scopes: const ['https://mail.google.com/'],
+    accountEmail: email,
+    deviceAuthorization: true,
+  );
+}
+
 void main() {
   group('AccountCredentialResolver', () {
     test('reads password authorization codes just-in-time', () async {
@@ -134,6 +153,77 @@ void main() {
             AuthFailureReason.oauthRequired,
           ),
         ),
+      );
+    });
+
+    test(
+      'expired device authorization renews through the platform and persists',
+      () async {
+        final storage = InMemorySecureStorageService();
+        final oauth = FakeOAuthPkceService();
+        final resolver = AccountCredentialResolver(
+          secureStorage: storage,
+          oauthPkceService: oauth,
+        );
+        final account = buildTestAccount(email: 'alice@gmail.com')
+            .copyWith(authType: MailAuthType.oauth2Pkce);
+        await storage.saveOAuthTokens(
+          account.id,
+          _deviceBundle(
+            email: 'alice@gmail.com',
+            accessToken: 'expired-device',
+          ),
+        );
+
+        final credential = await resolver(account) as OAuthCredential;
+
+        expect(credential.accessToken, 'device-refreshed-token-1');
+        expect(oauth.deviceRefreshCount, 1);
+        expect(oauth.refreshCount, 0);
+        expect(oauth.deviceRefreshEmails, ['alice@gmail.com']);
+        final persisted = storage.oauthBundles[account.id]!;
+        expect(persisted.deviceAuthorization, isTrue);
+        expect(persisted.accountEmail, 'alice@gmail.com');
+      },
+    );
+
+    test('each Google account renews with its own bound email', () async {
+      final storage = InMemorySecureStorageService();
+      final oauth = FakeOAuthPkceService();
+      final resolver = AccountCredentialResolver(
+        secureStorage: storage,
+        oauthPkceService: oauth,
+      );
+      final alice = buildTestAccount(
+        id: 'acc-alice',
+        email: 'alice@gmail.com',
+      ).copyWith(authType: MailAuthType.oauth2Pkce);
+      final bob = buildTestAccount(
+        id: 'acc-bob',
+        email: 'bob@gmail.com',
+      ).copyWith(authType: MailAuthType.oauth2Pkce);
+      await storage.saveOAuthTokens(
+        alice.id,
+        _deviceBundle(email: alice.email, accessToken: 'alice-expired'),
+      );
+      await storage.saveOAuthTokens(
+        bob.id,
+        _deviceBundle(email: bob.email, accessToken: 'bob-expired'),
+      );
+
+      await Future.wait([resolver(alice), resolver(bob)]);
+
+      expect(
+        oauth.deviceRefreshEmails,
+        containsAll(['alice@gmail.com', 'bob@gmail.com']),
+      );
+      expect(
+        storage.oauthBundles[alice.id]!.accessToken,
+        'device-refreshed-token-1',
+      );
+      expect(
+        storage.oauthBundles[bob.id]!.accessToken,
+        'device-refreshed-token-2',
       );
     });
   });

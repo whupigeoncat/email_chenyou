@@ -84,6 +84,34 @@ class ProviderPreset {
 }
 
 abstract final class ProviderPresets {
+  /// Tencent mail authorization codes are exactly 16 characters and are often
+  /// pasted with surrounding whitespace. Other providers may legitimately use
+  /// passwords containing spaces, so only Tencent values are trimmed.
+  static bool isTencentMail(MailProviderType type) {
+    return type == MailProviderType.qq || type == MailProviderType.foxmail;
+  }
+
+  static String normalizeAuthorizationSecret(
+    MailProviderType type,
+    String raw,
+  ) {
+    return isTencentMail(type) ? raw.trim() : raw;
+  }
+
+  static String? validateAuthorizationSecret(
+    MailProviderType type,
+    String raw,
+  ) {
+    final secret = normalizeAuthorizationSecret(type, raw);
+    if (secret.isEmpty) {
+      return '请填写客户端授权码（不是网页登录密码）。';
+    }
+    if (isTencentMail(type) && secret.length != 16) {
+      return 'QQ / Foxmail 邮箱需要填写 16 位客户端授权码，不是 QQ 登录密码。';
+    }
+    return null;
+  }
+
   static const List<int> accountColorPalette = [
     0xFFEA4335, // Gmail Red
     0xFF0078D4, // Outlook Blue
@@ -114,7 +142,8 @@ abstract final class ProviderPresets {
     idleRefreshInterval: Duration(minutes: 20),
     defaultColorValue: 0xFFEA4335,
     setupGuideZh:
-        '推荐使用 OAuth 2.0 登录；若使用应用专用密码，请先在 Google 账号开启两步验证并生成 16 位应用专用密码，同时确保 Gmail 网页端已启用 IMAP。',
+        '推荐点击“使用 Google 登录”，由 Google 官方页面处理验证码与二步验证。'
+        '若改用应用专用密码，请先在 Google 账号开启两步验证并生成 16 位应用专用密码，同时确保 Gmail 网页端已启用 IMAP。',
   );
 
   static const ProviderPreset outlook = ProviderPreset(
@@ -133,7 +162,8 @@ abstract final class ProviderPresets {
     idleRefreshInterval: Duration(minutes: 18),
     defaultColorValue: 0xFF0078D4,
     setupGuideZh:
-        '微软已停止支持个人版 Outlook 基础密码认证，必须使用 OAuth 2.0 (XOAUTH2) 现代化授权登录。',
+        '微软已停止支持个人版 Outlook 基础密码认证。请点击“使用 Microsoft 登录”，'
+        '由 Microsoft 官方页面处理验证码与二步验证，授权仅用于 IMAP/SMTP (XOAUTH2)。',
   );
 
   static const ProviderPreset netease163 = ProviderPreset(
@@ -152,8 +182,7 @@ abstract final class ProviderPresets {
     idleRefreshInterval: Duration(minutes: 14),
     inboxPollInterval: Duration(seconds: 60),
     defaultColorValue: 0xFFD93025,
-    setupGuideZh:
-        '请登录网页版 163 邮箱 -> 设置 -> POP3/SMTP/IMAP，开启 IMAP/SMTP 服务并新增客户端授权码（请填写授权码而非登录密码）。客户端将自动发送 RFC 2971 IMAP ID 报文。',
+    setupGuideZh: '请登录网页版 163 邮箱 -> 设置 -> POP3/SMTP/IMAP，开启 IMAP/SMTP 服务并新增客户端授权码（请填写授权码而非登录密码）。客户端将自动发送 RFC 2971 IMAP ID 报文。',
   );
 
   static const ProviderPreset qq = ProviderPreset(
@@ -172,7 +201,8 @@ abstract final class ProviderPresets {
     idleRefreshInterval: Duration(minutes: 14),
     defaultColorValue: 0xFF12B7F5,
     setupGuideZh:
-        '请登录网页版 QQ 邮箱 -> 设置 -> 账号 -> POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV 服务，开启 IMAP/SMTP 并生成 16 位授权码。QQ 邮箱严格限制并发连接数。',
+        '此客户端使用 QQ 官方 16 位 IMAP/SMTP 授权码流程：在官方页面开启服务、验证并生成授权码后返回粘贴'
+        '（不是 QQ 登录密码）。QQ 邮箱严格限制并发连接数。',
   );
 
   static const ProviderPreset foxmail = ProviderPreset(
@@ -191,7 +221,9 @@ abstract final class ProviderPresets {
     idleRefreshInterval: Duration(minutes: 14),
     defaultColorValue: 0xFFF59E0B,
     setupGuideZh:
-        'Foxmail 邮箱使用腾讯邮件服务器（imap.qq.com / smtp.qq.com）。请使用对应的 QQ/Foxmail 网页端生成的 IMAP/SMTP 授权码登录。',
+        'Foxmail 邮箱使用腾讯邮件服务器（imap.qq.com / smtp.qq.com）。'
+        '此客户端使用与 QQ 相同的官方 16 位 IMAP/SMTP 授权码流程，打开官方页验证生成后返回粘贴，'
+        '不要填写 QQ 密码。',
   );
 
   static const ProviderPreset custom = ProviderPreset(

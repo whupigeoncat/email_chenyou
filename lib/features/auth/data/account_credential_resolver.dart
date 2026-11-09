@@ -22,9 +22,9 @@ class AccountCredentialResolver {
     required SecureStorageService secureStorage,
     required OAuthPkceService oauthPkceService,
     SanitizedLogger? logger,
-  })  : _secureStorage = secureStorage,
-        _oauthPkceService = oauthPkceService,
-        _logger = logger ?? SanitizedLogger.instance;
+  }) : _secureStorage = secureStorage,
+       _oauthPkceService = oauthPkceService,
+       _logger = logger ?? SanitizedLogger.instance;
 
   final SecureStorageService _secureStorage;
   final OAuthPkceService _oauthPkceService;
@@ -64,7 +64,7 @@ class AccountCredentialResolver {
 
     final needsRefresh = cached.isExpiringSoon || cached.accessToken.isEmpty;
     final bundle = needsRefresh
-        ? await _serializedRefresh(account.id)
+        ? await _serializedRefresh(account.id, account.providerType)
         : cached;
 
     return OAuthCredential(
@@ -73,7 +73,10 @@ class AccountCredentialResolver {
     );
   }
 
-  Future<OAuthTokenBundle> _serializedRefresh(String accountId) {
+  Future<OAuthTokenBundle> _serializedRefresh(
+    String accountId,
+    MailProviderType providerType,
+  ) {
     return _serialize(accountId, () async {
       // Re-read inside the lock: a queued resolver may have already refreshed
       // while this call was waiting for the previous operation to finish.
@@ -92,7 +95,12 @@ class AccountCredentialResolver {
         'CredentialResolver',
         'Refreshing OAuth token for account $accountId',
       );
-      final refreshed = await _oauthPkceService.refreshToken(current);
+      final refreshed = current.deviceAuthorization
+          ? await _oauthPkceService.refreshDeviceAuthorization(
+              providerType: providerType,
+              current: current,
+            )
+          : await _oauthPkceService.refreshToken(current);
       await _secureStorage.saveOAuthTokens(accountId, refreshed);
       _logger.info(
         'CredentialResolver',
@@ -102,25 +110,24 @@ class AccountCredentialResolver {
     });
   }
 
-  Future<T> _serialize<T>(
-    String accountId,
-    Future<T> Function() action,
-  ) {
+  Future<T> _serialize<T>(String accountId, Future<T> Function() action) {
     final previous = _accountLocks[accountId] ?? Future<void>.value();
     final completer = Completer<T>();
     late final Future<void> next;
 
-    next = previous.then((_) async {
-      try {
-        completer.complete(await action());
-      } catch (error, stackTrace) {
-        completer.completeError(error, stackTrace);
-      }
-    }).whenComplete(() {
-      if (identical(_accountLocks[accountId], next)) {
-        _accountLocks.remove(accountId);
-      }
-    });
+    next = previous
+        .then((_) async {
+          try {
+            completer.complete(await action());
+          } catch (error, stackTrace) {
+            completer.completeError(error, stackTrace);
+          }
+        })
+        .whenComplete(() {
+          if (identical(_accountLocks[accountId], next)) {
+            _accountLocks.remove(accountId);
+          }
+        });
 
     _accountLocks[accountId] = next;
     return completer.future;

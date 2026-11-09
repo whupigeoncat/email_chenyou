@@ -15,6 +15,8 @@ class OAuthTokenBundle {
     required this.clientId,
     required this.tokenEndpoint,
     required this.scopes,
+    this.accountEmail,
+    this.deviceAuthorization = false,
   });
 
   final String accessToken;
@@ -24,29 +26,44 @@ class OAuthTokenBundle {
   final String tokenEndpoint;
   final List<String> scopes;
 
-  bool get isExpiringSoon =>
-      DateTime.now().toUtc().isAfter(expiresAt.toUtc().subtract(const Duration(seconds: 90)));
+  /// Account this token was verified against, used to bind Android's silent
+  /// Google re-authorization to the same Google account.
+  final String? accountEmail;
+
+  /// True for Android Google Play Services tokens: there is no refresh token
+  /// and expiry is renewed through the platform, never against a token endpoint.
+  final bool deviceAuthorization;
+
+  bool get isExpiringSoon => DateTime.now().toUtc().isAfter(
+    expiresAt.toUtc().subtract(const Duration(seconds: 90)),
+  );
 
   Map<String, dynamic> toJson() => {
-        'accessToken': accessToken,
-        'refreshToken': refreshToken,
-        'expiresAt': expiresAt.toUtc().toIso8601String(),
-        'clientId': clientId,
-        'tokenEndpoint': tokenEndpoint,
-        'scopes': scopes,
-      };
+    'accessToken': accessToken,
+    'refreshToken': refreshToken,
+    'expiresAt': expiresAt.toUtc().toIso8601String(),
+    'clientId': clientId,
+    'tokenEndpoint': tokenEndpoint,
+    'scopes': scopes,
+    'accountEmail': accountEmail,
+    'deviceAuthorization': deviceAuthorization,
+  };
 
   factory OAuthTokenBundle.fromJson(Map<String, dynamic> json) {
     return OAuthTokenBundle(
       accessToken: (json['accessToken'] as String?) ?? '',
       refreshToken: json['refreshToken'] as String?,
-      expiresAt: DateTime.tryParse((json['expiresAt'] as String?) ?? '') ??
+      expiresAt:
+          DateTime.tryParse((json['expiresAt'] as String?) ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       clientId: (json['clientId'] as String?) ?? '',
       tokenEndpoint: (json['tokenEndpoint'] as String?) ?? '',
       scopes: ((json['scopes'] as List<dynamic>?) ?? const [])
           .map((e) => e.toString())
           .toList(growable: false),
+      // Older JSON bundles predate these fields; missing values are safe.
+      accountEmail: json['accountEmail'] as String?,
+      deviceAuthorization: (json['deviceAuthorization'] as bool?) ?? false,
     );
   }
 }
@@ -56,22 +73,21 @@ class OAuthTokenBundle {
 /// All secrets, IMAP/SMTP authorization codes, and OAuth refresh/access tokens
 /// MUST go exclusively through this service and NEVER touch SQLite or logs.
 class SecureStorageService {
-  SecureStorageService({
-    FlutterSecureStorage? storage,
-    SanitizedLogger? logger,
-  })  : _storage = storage ??
-            const FlutterSecureStorage(
-              iOptions: IOSOptions(
-                accessibility: KeychainAccessibility.first_unlock,
-              ),
-              mOptions: MacOsOptions(
-                accessibility: KeychainAccessibility.first_unlock,
-                usesDataProtectionKeychain: false,
-              ),
-              aOptions: AndroidOptions(),
-              wOptions: WindowsOptions(),
+  SecureStorageService({FlutterSecureStorage? storage, SanitizedLogger? logger})
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            iOptions: IOSOptions(
+              accessibility: KeychainAccessibility.first_unlock,
             ),
-        _logger = logger ?? SanitizedLogger.instance;
+            mOptions: MacOsOptions(
+              accessibility: KeychainAccessibility.first_unlock,
+              usesDataProtectionKeychain: false,
+            ),
+            aOptions: AndroidOptions(),
+            wOptions: WindowsOptions(),
+          ),
+      _logger = logger ?? SanitizedLogger.instance;
 
   final FlutterSecureStorage _storage;
   final SanitizedLogger _logger;
@@ -106,7 +122,10 @@ class SecureStorageService {
     }
   }
 
-  Future<void> saveOAuthTokens(String accountId, OAuthTokenBundle bundle) async {
+  Future<void> saveOAuthTokens(
+    String accountId,
+    OAuthTokenBundle bundle,
+  ) async {
     try {
       final encoded = jsonEncode(bundle.toJson());
       await _storage.write(key: _oauthKey(accountId), value: encoded);

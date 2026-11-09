@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../app/di/core_providers.dart';
 import '../../../../core/constants/provider_presets.dart';
 import '../../domain/entities/mail_account.dart';
 import '../providers/account_setup_provider.dart';
@@ -22,7 +24,6 @@ class _AddAccountWizardPageState extends ConsumerState<AddAccountWizardPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _displayNameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _clientIdController = TextEditingController();
   final TextEditingController _imapHostController = TextEditingController();
   final TextEditingController _imapPortController = TextEditingController();
   final TextEditingController _smtpHostController = TextEditingController();
@@ -33,7 +34,6 @@ class _AddAccountWizardPageState extends ConsumerState<AddAccountWizardPage> {
     _emailController.dispose();
     _displayNameController.dispose();
     _passwordController.dispose();
-    _clientIdController.dispose();
     _imapHostController.dispose();
     _imapPortController.dispose();
     _smtpHostController.dispose();
@@ -60,7 +60,6 @@ class _AddAccountWizardPageState extends ConsumerState<AddAccountWizardPage> {
       _syncController(_imapPortController, next.imapPort.toString());
       _syncController(_smtpHostController, next.smtpHost);
       _syncController(_smtpPortController, next.smtpPort.toString());
-      _syncController(_clientIdController, next.oauthClientId);
     });
 
     return Scaffold(
@@ -135,24 +134,24 @@ class _AddAccountWizardPageState extends ConsumerState<AddAccountWizardPage> {
                       onChanged: notifier.updateDisplayName,
                     ),
                     const SizedBox(height: 18),
-                    Text(
-                      '账号色标',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
+                    Text('账号色标', style: Theme.of(context).textTheme.labelLarge),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
                       children: [
-                        for (var i = 0;
-                            i < ProviderPresets.accountColorPalette.length;
-                            i++)
+                        for (
+                          var i = 0;
+                          i < ProviderPresets.accountColorPalette.length;
+                          i++
+                        )
                           _ColorDot(
                             key: Key('account-color-$i'),
                             color: Color(
                               ProviderPresets.accountColorPalette[i],
                             ),
-                            selected: setup.colorValue ==
+                            selected:
+                                setup.colorValue ==
                                 ProviderPresets.accountColorPalette[i],
                             onTap: () => notifier.selectColor(
                               ProviderPresets.accountColorPalette[i],
@@ -223,27 +222,39 @@ class _AddAccountWizardPageState extends ConsumerState<AddAccountWizardPage> {
                     ),
                     const SizedBox(height: 14),
                     if (setup.authType == MailAuthType.passwordOrAuthCode &&
-                        setup.supportsPassword)
+                        setup.supportsPassword) ...[
                       TextField(
                         key: const Key('add-account-password'),
                         controller: _passwordController,
                         obscureText: true,
                         enableSuggestions: false,
                         autocorrect: false,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: '授权码 / 密码',
-                          hintText: '163 / QQ 请填写客户端授权码',
-                          prefixIcon: Icon(Icons.key_outlined),
+                          hintText:
+                              setup.providerType == MailProviderType.qq ||
+                                  setup.providerType == MailProviderType.foxmail
+                              ? '16 位客户端授权码（不是 QQ 密码）'
+                              : '163 / QQ 请填写客户端授权码',
+                          prefixIcon: const Icon(Icons.key_outlined),
                         ),
                         onChanged: notifier.updatePasswordOrAuthCode,
-                      )
-                    else if (setup.supportsOAuth)
+                      ),
+                      if (setup.providerType == MailProviderType.qq ||
+                          setup.providerType == MailProviderType.foxmail)
+                        const _TencentAuthCodeGuide(),
+                    ] else if (setup.supportsOAuth)
                       _OAuthSection(
-                        clientIdController: _clientIdController,
-                        guidance: _oauthGuidance(),
+                        providerType: setup.providerType,
+                        guidance: _oauthGuidance(setup.providerType),
+                        isConfigured: ref
+                            .watch(oauthPkceServiceProvider)
+                            .isConfiguredFor(setup.providerType),
+                        unavailableMessage: ref
+                            .watch(oauthPkceServiceProvider)
+                            .unavailableMessageFor(setup.providerType),
                         isAuthorizing: setup.isOAuthAuthorizing,
                         hasTokens: setup.oauthTokens != null,
-                        onClientIdChanged: notifier.updateOAuthClientId,
                         onAuthorize: notifier.startOAuthAuthorization,
                       )
                     else
@@ -370,8 +381,9 @@ class _AddAccountWizardPageState extends ConsumerState<AddAccountWizardPage> {
                 Expanded(
                   child: FilledButton.icon(
                     key: const Key('add-account-save'),
-                    onPressed:
-                        setup.isBusy ? null : () => _save(notifier, setup),
+                    onPressed: setup.isBusy
+                        ? null
+                        : () => _save(notifier, setup),
                     icon: setup.saveStatus == AccountSaveStatus.saving
                         ? const SizedBox(
                             width: 16,
@@ -390,38 +402,40 @@ class _AddAccountWizardPageState extends ConsumerState<AddAccountWizardPage> {
     );
   }
 
-  Future<void> _save(
-    AccountSetup notifier,
-    AccountSetupState setup,
-  ) async {
+  Future<void> _save(AccountSetup notifier, AccountSetupState setup) async {
     final account = await notifier.saveAccount();
     if (!mounted || account == null) return;
     widget.onSaved?.call(account);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${setup.preset.displayName} 账户已安全保存'),
-      ),
+      SnackBar(content: Text('${setup.preset.displayName} 账户已安全保存')),
     );
   }
 
-  String _oauthGuidance() {
+  String _oauthGuidance(MailProviderType provider) {
+    final providerName = provider == MailProviderType.gmail
+        ? 'Google'
+        : 'Microsoft';
     if (kIsWeb) {
-      return 'Web 端将打开新标签页完成 OAuth 2.0 PKCE 授权，回调仅返回本应用。';
+      return '当前 Web 构建不支持系统浏览器 OAuth 回调。';
+    }
+    if (provider == MailProviderType.gmail &&
+        defaultTargetPlatform == TargetPlatform.android) {
+      return '点击后将调用设备上的 Google 登录（Google Play 服务），由 $providerName 官方页面处理'
+          '验证码与二步验证。应用只申请 Gmail IMAP/SMTP 所需的 mail.google.com 权限，'
+          '并通过 Google 官方接口核对登录账号与上方邮箱一致。';
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.macOS:
       case TargetPlatform.windows:
       case TargetPlatform.linux:
-        return '桌面端指引：应用会打开系统浏览器，并在 127.0.0.1 的临时本地回环端口接收授权回调；'
-            '全程直连 Google / Microsoft 官方端点，不经过任何第三方中转服务器。'
-            '请在 OAuth 应用后台把该回环地址加入允许的重定向 URI。';
+        return '桌面端：应用会打开系统浏览器完成 $providerName 官方 PKCE 授权，'
+            '并在本机临时回环端口接收回调；全程直连官方端点，不经过第三方中转服务器。';
       case TargetPlatform.android:
       case TargetPlatform.iOS:
-        return '移动端指引：应用会打开系统安全浏览器（ASWebAuthenticationSession / Chrome Auth Tab），'
-            '授权完成后通过 com.localmail.client://oauth2redirect 返回应用。'
-            '全程直连 Google / Microsoft 官方端点，不经过任何第三方中转服务器。';
+        return '点击后将打开系统安全浏览器，由 $providerName 官方页面处理验证码与二步验证，'
+            '授权完成后返回应用；全程直连官方端点，不经过第三方中转服务器。';
       case TargetPlatform.fuchsia:
-        return '请使用系统浏览器完成 OAuth 2.0 PKCE 授权，回调仅返回本应用。';
+        return '请使用系统浏览器完成 $providerName 官方 OAuth 2.0 PKCE 授权，回调仅返回本应用。';
     }
   }
 }
@@ -495,59 +509,70 @@ class _ColorDot extends StatelessWidget {
 
 class _OAuthSection extends StatelessWidget {
   const _OAuthSection({
-    required this.clientIdController,
+    required this.providerType,
     required this.guidance,
+    required this.isConfigured,
+    required this.unavailableMessage,
     required this.isAuthorizing,
     required this.hasTokens,
-    required this.onClientIdChanged,
     required this.onAuthorize,
   });
 
-  final TextEditingController clientIdController;
+  final MailProviderType providerType;
   final String guidance;
+  final bool isConfigured;
+  final String unavailableMessage;
   final bool isAuthorizing;
   final bool hasTokens;
-  final ValueChanged<String> onClientIdChanged;
   final VoidCallback onAuthorize;
+
+  String get _buttonLabel {
+    if (isAuthorizing) return '等待官方登录完成…';
+    return switch (providerType) {
+      MailProviderType.gmail => '使用 Google 登录',
+      MailProviderType.outlook => '使用 Microsoft 登录',
+      _ => '使用 OAuth 2.0 登录',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextField(
-          key: const Key('add-account-client-id'),
-          controller: clientIdController,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            labelText: 'OAuth 客户端 ID（Client ID）',
-            hintText: 'Google / Microsoft 应用注册生成的 Client ID',
-            prefixIcon: Icon(Icons.app_registration),
-          ),
-          onChanged: onClientIdChanged,
-        ),
-        const SizedBox(height: 10),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Theme.of(context)
-                .colorScheme
-                .secondaryContainer
+            color: Theme.of(context).colorScheme.secondaryContainer
                 .withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Text(
-            guidance,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          child: Text(guidance, style: Theme.of(context).textTheme.bodySmall),
         ),
+        if (!isConfigured) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.errorContainer,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              unavailableMessage,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
             key: const Key('add-account-oauth'),
-            onPressed: isAuthorizing ? null : onAuthorize,
+            onPressed: isAuthorizing || !isConfigured ? null : onAuthorize,
             icon: isAuthorizing
                 ? const SizedBox(
                     width: 16,
@@ -555,9 +580,7 @@ class _OAuthSection extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.open_in_browser),
-            label: Text(
-              isAuthorizing ? '等待浏览器授权…' : '使用 OAuth 2.0 登录',
-            ),
+            label: Text(_buttonLabel),
           ),
         ),
         if (hasTokens) ...[
@@ -575,6 +598,40 @@ class _OAuthSection extends StatelessWidget {
             ],
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// QQ / Foxmail run on Tencent mail servers; this private client uses the
+/// official 16-character IMAP/SMTP authorization code, never the QQ web password.
+class _TencentAuthCodeGuide extends StatelessWidget {
+  const _TencentAuthCodeGuide();
+
+  static final Uri _guideUri = Uri.parse(
+    'https://help.mail.qq.com/detail/106/985',
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          '此客户端使用 QQ 官方 16 位 IMAP/SMTP 授权码流程。'
+          '请在官方页面开启 POP3/IMAP/SMTP 服务、验证并生成授权码，'
+          '然后返回粘贴到上方；不要填写 QQ 登录密码。Foxmail 邮箱同样使用腾讯邮件服务。',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 4),
+        OutlinedButton.icon(
+          key: const Key('qq-auth-code-guide'),
+          onPressed: () =>
+              launchUrl(_guideUri, mode: LaunchMode.externalApplication),
+          icon: const Icon(Icons.help_outline),
+          label: const Text('打开 QQ 邮箱官方授权码指南'),
+        ),
       ],
     );
   }
@@ -614,9 +671,7 @@ class _StatusBanner extends StatelessWidget {
               Expanded(
                 child: Text(
                   message,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
+                  style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: color),
                 ),
               ),

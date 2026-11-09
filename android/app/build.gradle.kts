@@ -47,3 +47,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Google Identity Services authorization on Android (Gmail XOAUTH2 token).
+    implementation("com.google.android.gms:play-services-auth:22.0.0")
+}

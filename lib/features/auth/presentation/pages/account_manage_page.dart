@@ -6,7 +6,6 @@ import '../../../../app/di/core_providers.dart';
 import '../../../../core/constants/provider_presets.dart';
 import '../../../../core/error/failures.dart';
 import '../../../../core/network/account_connection_slot.dart';
-import '../../../../core/security/oauth_pkce_service.dart';
 import '../../domain/entities/account_setup_draft.dart';
 import '../../domain/entities/mail_account.dart';
 import 'add_account_wizard_page.dart';
@@ -174,16 +173,23 @@ class AccountManagePage extends ConsumerWidget {
       return;
     }
 
-    final clientId = await _promptOAuthClientId(context, account);
-    if (clientId == null || !context.mounted) return;
+    final oauthService = ref.read(oauthPkceServiceProvider);
+    if (!oauthService.isConfiguredFor(account.providerType)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            oauthService.unavailableMessageFor(account.providerType),
+          ),
+        ),
+      );
+      return;
+    }
     try {
-      final tokens = await ref
-          .read(oauthPkceServiceProvider)
-          .authorize(
-            providerType: account.providerType,
-            clientId: clientId,
-            loginHintEmail: account.email,
-          );
+      final tokens = await oauthService.authorize(
+        providerType: account.providerType,
+        expectedEmail: account.email,
+        loginHintEmail: account.email,
+      );
       await ref
           .read(authRepositoryProvider)
           .replaceCredential(account.id, OAuthAccountCredential(tokens));
@@ -223,42 +229,6 @@ class AccountManagePage extends ConsumerWidget {
           FilledButton(
             onPressed: () => Navigator.of(context).pop(controller.text),
             child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (result == null || result.isEmpty) return null;
-    return result;
-  }
-
-  Future<String?> _promptOAuthClientId(
-    BuildContext context,
-    MailAccount account,
-  ) async {
-    final controller = TextEditingController(
-      text: OAuthPkceService.defaultClientIdFor(account.providerType) ?? '',
-    );
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('重新授权 ${account.email}'),
-        content: TextField(
-          key: const Key('reset-oauth-client-id'),
-          controller: controller,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            labelText: 'OAuth 客户端 ID（Client ID）',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('打开浏览器授权'),
           ),
         ],
       ),

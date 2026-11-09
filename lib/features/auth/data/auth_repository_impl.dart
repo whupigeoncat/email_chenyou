@@ -84,7 +84,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
     // Phase 1 of the atomic write: secret first, so a metadata row can never
     // exist without a usable credential.
-    await _writeCredential(account.id, credential);
+    await _writeCredential(account.id, draft.providerType, credential);
 
     try {
       // Phase 2: metadata only. NO secret column exists in DbAccounts.
@@ -179,7 +179,7 @@ class AuthRepositoryImpl implements AuthRepository {
     if (account == null) {
       throw const StorageFailure(userMessage: '账户不存在或已被删除。');
     }
-    await _writeCredential(accountId, credential);
+    await _writeCredential(accountId, account.providerType, credential);
     await _syncPoolSafely();
   }
 
@@ -264,22 +264,37 @@ class AuthRepositoryImpl implements AuthRepository {
 
   Future<void> _writeCredential(
     String accountId,
+    MailProviderType providerType,
     PendingAccountCredential credential,
   ) async {
     switch (credential) {
       case PasswordAccountCredential(:final secret):
-        if (secret.isEmpty) {
-          throw const AuthFailure(
+        final validationError = ProviderPresets.validateAuthorizationSecret(
+          providerType,
+          secret,
+        );
+        if (validationError != null) {
+          throw AuthFailure(
             reason: AuthFailureReason.authorizationCodeRequired,
-            userMessage: '请填写邮箱授权码后再保存。',
+            userMessage: validationError,
           );
         }
-        await _secureStorage.savePasswordSecret(accountId, secret);
+        await _secureStorage.savePasswordSecret(
+          accountId,
+          ProviderPresets.normalizeAuthorizationSecret(providerType, secret),
+        );
       case OAuthAccountCredential(:final tokens):
         if (tokens.accessToken.isEmpty) {
           throw const AuthFailure(
             reason: AuthFailureReason.oauthRequired,
             userMessage: 'OAuth 访问令牌为空，请重新授权登录。',
+          );
+        }
+        if (!tokens.deviceAuthorization &&
+            (tokens.refreshToken == null || tokens.refreshToken!.isEmpty)) {
+          throw const AuthFailure(
+            reason: AuthFailureReason.oauthRequired,
+            userMessage: '浏览器 OAuth 授权缺少刷新令牌，保存后将无法续期，请重新登录。',
           );
         }
         await _secureStorage.saveOAuthTokens(accountId, tokens);

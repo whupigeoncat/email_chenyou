@@ -13,6 +13,18 @@
 - SMTP 已接受的邮件不会因 IMAP 副本保存失败而自动重发。副本待保存时保留本地正文和附件，可在发件箱点击“补存已发送副本”；启动时也会重新核对。只有确认服务器副本存在或成功保存后才清理暂存附件。
 - 投递结果不确定的邮件会暂停自动重试，需要在发件箱人工核对。
 
+## Gmail / Outlook / QQ 登录
+
+普通使用者无需填写 OAuth Client ID：
+
+- Gmail：Android 使用 Google Play 服务官方设备授权；桌面使用系统浏览器 + PKCE。
+- Outlook：系统浏览器 + PKCE，移动端使用固定回跳 scheme，桌面使用本机回环地址。
+- QQ / Foxmail：此客户端使用 QQ 官方 16 位 IMAP/SMTP 授权码流程，打开官方页验证并生成授权码后返回粘贴，不是 QQ 密码。
+
+开发者需要一次性注册 Google / Microsoft OAuth 应用，并通过构建参数注入 Client ID。
+注册步骤、签名 SHA-1、回跳地址、scope 和平台构建示例见
+[`docs/oauth-setup.md`](docs/oauth-setup.md)。未配置时应用会显示“此构建未配置 … 登录”。
+
 ## 开发与验证
 
 ```sh

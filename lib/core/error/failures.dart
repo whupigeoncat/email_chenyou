@@ -33,6 +33,9 @@ enum AuthFailureReason {
   oauthRequired,
   oauthTokenExpired,
   oauthCancelled,
+  oauthNotConfigured,
+  oauthWrongAccount,
+  oauthDeviceUnavailable,
   unknown,
 }
 
