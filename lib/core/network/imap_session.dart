@@ -224,6 +224,19 @@ abstract interface class ImapSession {
     int limit = 0,
   });
 
+  /// Bounded history page, strictly before [beforeUid].
+  Future<List<RemoteFetchedMessage>> fetchOlderMessageHeaders({
+    required int beforeUid,
+    int limit = 200,
+  });
+
+  /// Returns flags for existing requested UIDs; missing UIDs have vanished.
+  Future<Map<int, List<String>>> uidFetchFlags(List<int> uids);
+
+  Future<bool> containsMessageId(String messageId);
+
+  Future<void> appendSentMessage(String mimeText, {DateTime? sentAt});
+
   /// Fetches the full message using `BODY.PEEK[]` (never sets `\Seen`).
   Future<RemoteFetchedMessage?> uidFetchFullMessage(int uid);
 

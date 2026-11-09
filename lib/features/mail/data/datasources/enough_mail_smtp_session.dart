@@ -26,8 +26,8 @@ class SanitizedSmtpClient extends SmtpClient {
     super.logName,
     super.onBadCertificate,
     super.securityContext,
-  })  : _logger = logger,
-        super(clientDomain);
+  }) : _logger = logger,
+       super(clientDomain);
 
   final SanitizedLogger _logger;
   bool _authInProgress = false;
@@ -55,10 +55,7 @@ class SanitizedSmtpClient extends SmtpClient {
 
     if (!isClient) {
       _handleServerLine(text);
-      _logger.debug(
-        'SmtpWire',
-        SanitizedLogger.sanitize('$direction: $text'),
-      );
+      _logger.debug('SmtpWire', SanitizedLogger.sanitize('$direction: $text'));
       return;
     }
 
@@ -79,10 +76,7 @@ class SanitizedSmtpClient extends SmtpClient {
         return;
       }
     }
-    _logger.debug(
-      'SmtpWire',
-      SanitizedLogger.sanitize('$direction: $text'),
-    );
+    _logger.debug('SmtpWire', SanitizedLogger.sanitize('$direction: $text'));
   }
 
   void _handleServerLine(String text) {
@@ -108,9 +102,9 @@ class EnoughMailSmtpSession implements SmtpSession {
     required SmtpClient client,
     SanitizedLogger? logger,
     Duration commandTimeout = const Duration(seconds: 20),
-  })  : _client = client,
-        _logger = logger ?? SanitizedLogger.instance,
-        _commandTimeout = commandTimeout;
+  }) : _client = client,
+       _logger = logger ?? SanitizedLogger.instance,
+       _commandTimeout = commandTimeout;
 
   final SmtpClient _client;
   final SanitizedLogger _logger;
@@ -142,8 +136,7 @@ class EnoughMailSmtpSession implements SmtpSession {
           throw const SmtpFailure(
             reason: SmtpFailureReason.startTlsUnavailable,
             retryable: false,
-            userMessage:
-                'SMTP 服务器未声明 STARTTLS，已阻止在未加密连接上发送邮件凭据。',
+            userMessage: 'SMTP 服务器未声明 STARTTLS，已阻止在未加密连接上发送邮件凭据。',
           );
         }
         await _client.startTls().timeout(_commandTimeout);
@@ -151,8 +144,7 @@ class EnoughMailSmtpSession implements SmtpSession {
 
       switch (credential) {
         case PasswordCredential(:final secret):
-          final mechanism = _client.serverInfo
-                  .supportsAuth(AuthMechanism.login)
+          final mechanism = _client.serverInfo.supportsAuth(AuthMechanism.login)
               ? AuthMechanism.login
               : AuthMechanism.plain;
           await _client
@@ -209,87 +201,8 @@ class EnoughMailSmtpSession implements SmtpSession {
     }
   }
 
-  /// Builds a standards-compliant RFC 5322 message and removes the Bcc header
-  /// from the transmitted payload while keeping Bcc recipients in the envelope.
-  Future<MimeMessage> buildMimeMessage(OutgoingMailEnvelope envelope) async {
-    final hasHtml = envelope.htmlBody?.trim().isNotEmpty == true;
-    final builder = hasHtml
-        ? MessageBuilder.prepareMultipartAlternativeMessage(
-            plainText: envelope.plainBody,
-            htmlText: envelope.htmlBody!,
-          )
-        : MessageBuilder(text: envelope.plainBody);
-
-    builder
-      ..subject = envelope.subject
-      ..subjectEncoding = HeaderEncoding.Q
-      ..date = DateTime.now()
-      ..from = <MailAddress>[
-        MailAddress(envelope.fromName, envelope.fromEmail),
-      ]
-      ..to = envelope.to
-          .map((entry) => MailAddress(entry.name, entry.email))
-          .toList(growable: false)
-      ..cc = envelope.cc
-          .map((entry) => MailAddress(entry.name, entry.email))
-          .toList(growable: false)
-      ..bcc = envelope.bcc
-          .map((entry) => MailAddress(entry.name, entry.email))
-          .toList(growable: false);
-
-    if (envelope.messageId != null && envelope.messageId!.trim().isNotEmpty) {
-      builder.messageId = requireSafeHeader('Message-ID', envelope.messageId!);
-    }
-    if (envelope.inReplyTo != null && envelope.inReplyTo!.trim().isNotEmpty) {
-      builder.setHeader(
-        'In-Reply-To',
-        requireSafeHeader('In-Reply-To', envelope.inReplyTo!),
-      );
-    }
-    if (envelope.referencesHeader != null &&
-        envelope.referencesHeader!.trim().isNotEmpty) {
-      builder.setHeader(
-        'References',
-        requireSafeHeader('References', envelope.referencesHeader!),
-      );
-    }
-
-    for (final attachment in envelope.attachments) {
-      final safeName = sanitizeAttachmentFileName(attachment.fileName);
-      final file = File(attachment.localPath);
-      if (!await file.exists()) {
-        throw const SmtpFailure(
-          reason: SmtpFailureReason.attachmentMissing,
-          retryable: false,
-          userMessage: '附件文件已不存在，请重新选择附件后再发送。',
-        );
-      }
-      try {
-        final reader = await file.open(mode: FileMode.read);
-        await reader.close();
-      } catch (_) {
-        throw const SmtpFailure(
-          reason: SmtpFailureReason.attachmentMissing,
-          retryable: false,
-          userMessage: '附件文件不可读取，请重新选择附件后再发送。',
-        );
-      }
-      await builder.addFile(
-        file,
-        MediaType.fromText(attachment.mimeType),
-        disposition: ContentDispositionHeader.from(
-          ContentDisposition.attachment,
-          filename: safeName,
-          size: attachment.sizeBytes,
-        ),
-      );
-    }
-
-    final message = builder.buildMimeMessage();
-    // Never transmit Bcc addresses in the message header.
-    message.removeHeader('Bcc');
-    return message;
-  }
+  Future<MimeMessage> buildMimeMessage(OutgoingMailEnvelope envelope) =>
+      buildOutgoingMimeMessage(envelope);
 
   @override
   Future<void> quitAndDisconnect({
@@ -342,15 +255,16 @@ class EnoughMailSmtpSessionFactory implements SmtpSessionFactory {
     SanitizedLogger? logger,
     Duration commandTimeout = const Duration(seconds: 20),
     String clientDomain = 'local-mail-client',
-  })  : _logger = logger ?? SanitizedLogger.instance,
-        _commandTimeout = commandTimeout,
-        _clientFactory = clientFactory ??
-            (() => SanitizedSmtpClient(
-                  clientDomain: clientDomain,
-                  logger: logger ?? SanitizedLogger.instance,
-                  // Production must never print SMTP wire data.
-                  isLogEnabled: false,
-                ));
+  }) : _logger = logger ?? SanitizedLogger.instance,
+       _commandTimeout = commandTimeout,
+       _clientFactory =
+           clientFactory ??
+           (() => SanitizedSmtpClient(
+             clientDomain: clientDomain,
+             logger: logger ?? SanitizedLogger.instance,
+             // Production must never print SMTP wire data.
+             isLogEnabled: false,
+           ));
 
   final SmtpClientFactory _clientFactory;
   final SanitizedLogger _logger;
@@ -369,7 +283,9 @@ class EnoughMailSmtpSessionFactory implements SmtpSessionFactory {
 /// Strips/rejects CRLF and NUL from any header value to prevent header
 /// injection. The safe filename helper is shared with the SMTP attachment part.
 String requireSafeHeader(String name, String value) {
-  if (value.contains('\r') || value.contains('\n') || value.contains('\u0000')) {
+  if (value.contains('\r') ||
+      value.contains('\n') ||
+      value.contains('\u0000')) {
     throw SmtpFailure(
       reason: SmtpFailureReason.protocolError,
       retryable: false,
@@ -421,8 +337,8 @@ AppFailure mapSmtpExceptionToFailure(
   final code = error is SmtpException ? error.response.code : null;
   final rawText = error is SmtpException
       ? error.response.responseLines
-          .map((line) => '${line.code} ${line.message}')
-          .join(' ')
+            .map((line) => '${line.code} ${line.message}')
+            .join(' ')
       : error.toString();
   final detail = SanitizedLogger.sanitize(rawText);
   final lower = rawText.toLowerCase();
@@ -453,7 +369,10 @@ AppFailure mapSmtpExceptionToFailure(
       userMessage: 'SMTP 服务器 STARTTLS 升级失败，已阻止明文发送。',
     );
   }
-  if (code == 535 || code == 534 || code == 530 || code == 530 ||
+  if (code == 535 ||
+      code == 534 ||
+      code == 530 ||
+      code == 530 ||
       lower.contains('authentication failed') ||
       lower.contains('invalid credentials')) {
     if (authType == MailAuthType.oauth2Pkce || lower.contains('xoauth2')) {
@@ -480,7 +399,9 @@ AppFailure mapSmtpExceptionToFailure(
       cause: error,
     );
   }
-  if (code == 552 || code == 452 || lower.contains('message size') ||
+  if (code == 552 ||
+      code == 452 ||
+      lower.contains('message size') ||
       lower.contains('too large') ||
       lower.contains('exceeded')) {
     return SmtpFailure(
@@ -507,4 +428,87 @@ AppFailure mapSmtpExceptionToFailure(
     technicalDetail: detail,
     cause: error,
   );
+}
+
+/// Shared wire representation; Bcc is kept only in the SMTP envelope.
+Future<MimeMessage> buildOutgoingMimeMessage(
+  OutgoingMailEnvelope envelope, {
+  DateTime? sentAt,
+}) async {
+  _validateEnvelopeHeaders(envelope);
+  final hasHtml = envelope.htmlBody?.trim().isNotEmpty == true;
+  final builder = hasHtml
+      ? MessageBuilder.prepareMultipartAlternativeMessage(
+          plainText: envelope.plainBody,
+          htmlText: envelope.htmlBody!,
+        )
+      : MessageBuilder(text: envelope.plainBody);
+
+  builder
+    ..subject = envelope.subject
+    ..subjectEncoding = HeaderEncoding.Q
+    ..date = sentAt ?? DateTime.now()
+    ..from = <MailAddress>[MailAddress(envelope.fromName, envelope.fromEmail)]
+    ..to = envelope.to
+        .map((entry) => MailAddress(entry.name, entry.email))
+        .toList(growable: false)
+    ..cc = envelope.cc
+        .map((entry) => MailAddress(entry.name, entry.email))
+        .toList(growable: false)
+    ..bcc = envelope.bcc
+        .map((entry) => MailAddress(entry.name, entry.email))
+        .toList(growable: false);
+
+  if (envelope.messageId != null && envelope.messageId!.trim().isNotEmpty) {
+    builder.messageId = requireSafeHeader('Message-ID', envelope.messageId!);
+  }
+  if (envelope.inReplyTo != null && envelope.inReplyTo!.trim().isNotEmpty) {
+    builder.setHeader(
+      'In-Reply-To',
+      requireSafeHeader('In-Reply-To', envelope.inReplyTo!),
+    );
+  }
+  if (envelope.referencesHeader != null &&
+      envelope.referencesHeader!.trim().isNotEmpty) {
+    builder.setHeader(
+      'References',
+      requireSafeHeader('References', envelope.referencesHeader!),
+    );
+  }
+
+  for (final attachment in envelope.attachments) {
+    final safeName = sanitizeAttachmentFileName(attachment.fileName);
+    final file = File(attachment.localPath);
+    if (!await file.exists()) {
+      throw const SmtpFailure(
+        reason: SmtpFailureReason.attachmentMissing,
+        retryable: false,
+        userMessage: '附件文件已不存在，请重新选择附件后再发送。',
+      );
+    }
+    try {
+      final reader = await file.open(mode: FileMode.read);
+      await reader.close();
+    } catch (_) {
+      throw const SmtpFailure(
+        reason: SmtpFailureReason.attachmentMissing,
+        retryable: false,
+        userMessage: '附件文件不可读取，请重新选择附件后再发送。',
+      );
+    }
+    await builder.addFile(
+      file,
+      MediaType.fromText(attachment.mimeType),
+      disposition: ContentDispositionHeader.from(
+        ContentDisposition.attachment,
+        filename: safeName,
+        size: attachment.sizeBytes,
+      ),
+    );
+  }
+
+  final message = builder.buildMimeMessage();
+  // Never transmit Bcc addresses in the message header.
+  message.removeHeader('Bcc');
+  return message;
 }

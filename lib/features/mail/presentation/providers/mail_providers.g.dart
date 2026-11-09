@@ -1174,7 +1174,7 @@ final class OutboxQueueProvider
   }
 }
 
-String _$outboxQueueHash() => r'e923dfb867fc4dcf29dba2c9a0ec3694bca54215';
+String _$outboxQueueHash() => r'9f9bd48a11582a877914b48ac65bc7e3c07f6526';
 
 @ProviderFor(saveDraftUseCase)
 final saveDraftUseCaseProvider = SaveDraftUseCaseProvider._();
@@ -1511,3 +1511,45 @@ final class AccountSyncBootstrapProvider
 
 String _$accountSyncBootstrapHash() =>
     r'a4fe59882839d068c514d8b77845e8223d3a35c7';
+
+@ProviderFor(sentCopyService)
+final sentCopyServiceProvider = SentCopyServiceProvider._();
+
+final class SentCopyServiceProvider
+    extends
+        $FunctionalProvider<SentCopyService, SentCopyService, SentCopyService>
+    with $Provider<SentCopyService> {
+  SentCopyServiceProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sentCopyServiceProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sentCopyServiceHash();
+
+  @$internal
+  @override
+  $ProviderElement<SentCopyService> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  SentCopyService create(Ref ref) {
+    return sentCopyService(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SentCopyService value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SentCopyService>(value),
+    );
+  }
+}
+
+String _$sentCopyServiceHash() => r'f29a37cfc4aaaaec18a9a78a58e471c7a4872813';

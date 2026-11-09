@@ -9,6 +9,7 @@ import '../../core/network/lifecycle_manager.dart';
 import '../../features/mail/data/services/account_sync_bootstrap.dart';
 import '../../features/mail/data/services/inbox_sync_coordinator.dart';
 import '../../features/mail/data/services/outbox_queue_service.dart';
+import '../../features/mail/domain/entities/outbox_message.dart';
 import '../../features/mail/presentation/providers/mail_providers.dart';
 import 'core_providers.dart';
 
@@ -50,9 +51,21 @@ AppRuntime appRuntime(Ref ref) {
     try {
       await repository.initialize();
       await bootstrap.start();
-      await outboxQueue.start(
-        networkRestored: connectivity.networkRestored,
-      );
+      await outboxQueue.start(networkRestored: connectivity.networkRestored);
+      final sent = await ref
+          .read(outboxRepositoryProvider)
+          .getMessages(statuses: {OutboxStatus.sent});
+      for (final message in sent.where((message) => !message.sentCopySaved)) {
+        try {
+          await ref.read(sentCopyServiceProvider).save(message.id);
+        } catch (error) {
+          SanitizedLogger.instance.warn(
+            'AppRuntime',
+            'Sent copy remains local',
+            error,
+          );
+        }
+      }
     } catch (error, stackTrace) {
       SanitizedLogger.instance.error(
         'AppRuntime',

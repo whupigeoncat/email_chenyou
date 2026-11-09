@@ -24,9 +24,7 @@ class _OutboxQueuePageState extends ConsumerState<OutboxQueuePage> {
       appBar: AppBar(title: const Text('草稿与发件箱')),
       body: messagesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text('读取发件箱失败：$error'),
-        ),
+        error: (error, stack) => Center(child: Text('读取发件箱失败：$error')),
         data: (messages) {
           if (messages.isEmpty) {
             return const Center(child: Text('草稿与发件箱为空'));
@@ -73,17 +71,17 @@ class _OutboxQueuePageState extends ConsumerState<OutboxQueuePage> {
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     message.status.labelZh,
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelSmall
+                    style: Theme.of(context).textTheme.labelSmall
                         ?.copyWith(color: statusColor),
                   ),
                 ),
@@ -114,7 +112,8 @@ class _OutboxQueuePageState extends ConsumerState<OutboxQueuePage> {
               ),
             ],
             if (message.lastError != null &&
-                message.status != OutboxStatus.sent) ...[
+                (message.status != OutboxStatus.sent ||
+                    !message.sentCopySaved)) ...[
               const SizedBox(height: 6),
               Text(
                 message.lastError!,
@@ -126,9 +125,20 @@ class _OutboxQueuePageState extends ConsumerState<OutboxQueuePage> {
                 ),
               ),
             ],
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            if (message.status == OutboxStatus.sent)
+              Text(message.sentCopySaved ? '服务器副本已保存' : '已发送，本地副本保留，服务器副本待核对'),
+            Wrap(
+              alignment: WrapAlignment.end,
               children: [
+                if (message.status == OutboxStatus.sent &&
+                    !message.sentCopySaved)
+                  TextButton(
+                    key: Key('save-sent-copy-${message.id}'),
+                    onPressed: _busy.contains(message.id)
+                        ? null
+                        : () => _saveSentCopy(message),
+                    child: const Text('补存已发送副本'),
+                  ),
                 if (message.status == OutboxStatus.uncertain) ...[
                   TextButton(
                     key: Key('mark-sent-${message.id}'),
@@ -179,14 +189,36 @@ class _OutboxQueuePageState extends ConsumerState<OutboxQueuePage> {
     );
   }
 
+  Future<void> _saveSentCopy(OutboxMessage message) async {
+    setState(() => _busy.add(message.id));
+    try {
+      await ref.read(sentCopyServiceProvider).save(message.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('服务器副本已保存')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is AppFailure ? error.userMessage : '补存失败，本地副本已保留',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy.remove(message.id));
+    }
+  }
+
   Future<void> _retry(OutboxMessage message) async {
     setState(() => _busy.add(message.id));
     try {
       await ref.read(retryOutboxMessageUseCaseProvider).call(message.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已重新加入发送队列')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已重新加入发送队列')));
     } catch (error) {
       if (!mounted) return;
       final text = error is AppFailure ? error.userMessage : '重试失败：$error';
@@ -247,9 +279,8 @@ class _OutboxQueuePageState extends ConsumerState<OutboxQueuePage> {
     try {
       await ref.read(markOutboxMessageSentUseCaseProvider).call(message.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已标记为已发送')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已标记为已发送')));
     } catch (error) {
       if (!mounted) return;
       final text = error is AppFailure ? error.userMessage : '操作失败：$error';
@@ -265,9 +296,8 @@ class _OutboxQueuePageState extends ConsumerState<OutboxQueuePage> {
     try {
       await ref.read(deleteOutboxMessageUseCaseProvider).call(message.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已删除')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已删除')));
     } catch (error) {
       if (!mounted) return;
       final text = error is AppFailure ? error.userMessage : '删除失败：$error';

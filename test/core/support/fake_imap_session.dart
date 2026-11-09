@@ -44,6 +44,13 @@ class FakeImapSessionFactory implements ImapSessionFactory {
   /// the RFC 3501 `fromUid:*` "last message echo" quirk.
   List<RemoteFetchedMessage>? uidFetchResponse;
 
+  Map<int, List<String>>? flagFetchResponse;
+  final List<int> flagFetchBatchSizes = [];
+  final Map<String, Set<String>> messageIdsByFolder = {};
+  bool failAppend = false;
+  bool failAfterAppend = false;
+  int totalAppends = 0;
+  String? lastAppendedMime;
   bool failFlagStore;
   final bool supportsIdle;
   final bool failStartIdle;
@@ -71,6 +78,7 @@ class FakeImapSessionFactory implements ImapSessionFactory {
       _maxConcurrentActiveCount = active;
     }
   }
+
   int get totalLogoutCount =>
       sessions.fold(0, (sum, session) => sum + session.logoutCount);
   int get totalForceCloseCount =>
@@ -210,6 +218,69 @@ class FakeImapSession implements ImapSession {
         }).toList()..sort((a, b) => a.uid.compareTo(b.uid));
     if (limit <= 0 || messages.length <= limit) return messages;
     return messages.sublist(messages.length - limit);
+  }
+
+  int appendCount = 0;
+  Set<String> get sentMessageIds => _factory.messageIdsByFolder.putIfAbsent(
+    _selectedFolder ?? 'INBOX',
+    () => {},
+  );
+  String? appendedMime;
+
+  @override
+  Future<List<RemoteFetchedMessage>> fetchOlderMessageHeaders({
+    required int beforeUid,
+    int limit = 200,
+  }) async {
+    final messages =
+        (_factory.headers[_selectedFolder ?? 'INBOX'] ??
+                <RemoteFetchedMessage>[])
+            .where((message) => message.uid < beforeUid)
+            .toList()
+          ..sort((a, b) => a.uid.compareTo(b.uid));
+    return messages.length > limit
+        ? messages.sublist(messages.length - limit)
+        : messages;
+  }
+
+  @override
+  Future<Map<int, List<String>>> uidFetchFlags(List<int> uids) async {
+    _factory.flagFetchBatchSizes.add(uids.length);
+    if (_factory.flagFetchResponse != null) {
+      return {
+        for (final uid in uids)
+          if (_factory.flagFetchResponse!.containsKey(uid))
+            uid: _factory.flagFetchResponse![uid]!,
+      };
+    }
+    return {
+      for (final message
+          in _factory.headers[_selectedFolder ?? 'INBOX'] ??
+              <RemoteFetchedMessage>[])
+        if (uids.contains(message.uid)) message.uid: message.flags,
+    };
+  }
+
+  @override
+  Future<bool> containsMessageId(String messageId) async =>
+      sentMessageIds.contains(messageId);
+
+  @override
+  Future<void> appendSentMessage(String mimeText, {DateTime? sentAt}) async {
+    if (_factory.failAppend) throw StateError('simulated append failure');
+    appendCount++;
+    _factory.totalAppends++;
+    appendedMime = mimeText;
+    _factory.lastAppendedMime = mimeText;
+    final id = RegExp(
+      r'^Message-ID:\s*(.+)$',
+      caseSensitive: false,
+      multiLine: true,
+    ).firstMatch(mimeText)?.group(1)?.trim();
+    if (id != null) sentMessageIds.add(id);
+    if (_factory.failAfterAppend) {
+      throw StateError('simulated lost APPEND acknowledgement');
+    }
   }
 
   @override

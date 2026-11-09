@@ -71,6 +71,15 @@ class AccountManagePage extends ConsumerWidget {
                 onResetCredential: () =>
                     _resetCredential(context, ref, account),
                 onDelete: () => _deleteAccount(context, ref, account),
+                onToggleSentCopy: (enabled) async {
+                  try {
+                    await ref
+                        .read(authRepositoryProvider)
+                        .updateAccount(account.copyWith(saveSentCopy: enabled));
+                  } catch (error) {
+                    if (context.mounted) _showError(context, error, '保存副本设置失败');
+                  }
+                },
               );
             },
           );
@@ -273,6 +282,7 @@ class _AccountCard extends StatelessWidget {
     required this.onToggleEnabled,
     required this.onResetCredential,
     required this.onDelete,
+    required this.onToggleSentCopy,
   });
 
   final MailAccount account;
@@ -280,6 +290,7 @@ class _AccountCard extends StatelessWidget {
   final ValueChanged<bool> onToggleEnabled;
   final VoidCallback onResetCredential;
   final VoidCallback onDelete;
+  final ValueChanged<bool> onToggleSentCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -346,6 +357,14 @@ class _AccountCard extends StatelessWidget {
                   ],
                 ),
               ],
+            ),
+            SwitchListTile.adaptive(
+              key: Key('save-sent-copy-${account.id}'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('保存已发送副本'),
+              subtitle: const Text('服务商不自动保存时开启；保存前会先核对是否已有副本。'),
+              value: account.saveSentCopy,
+              onChanged: onToggleSentCopy,
             ),
             const SizedBox(height: 8),
             Row(

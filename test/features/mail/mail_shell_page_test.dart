@@ -25,6 +25,7 @@ class RecordingPollFolderUseCase implements PollFolderUseCase {
   Future<MailFolder> call({
     required MailAccount account,
     required MailFolder folder,
+    bool loadOlder = false,
   }) async {
     calls++;
     lastFolder = folder;
@@ -33,8 +34,9 @@ class RecordingPollFolderUseCase implements PollFolderUseCase {
 }
 
 void main() {
-  testWidgets('desktop shell uses three panes and empty-account guidance',
-      (tester) async {
+  testWidgets('desktop shell uses three panes and empty-account guidance', (
+    tester,
+  ) async {
     final harness = TestRuntimeHarness();
     addTearDown(harness.dispose);
     tester.view.physicalSize = const Size(1200, 900);
@@ -70,8 +72,9 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('mobile shell uses a drawer and hides the desktop sidebar',
-      (tester) async {
+  testWidgets('mobile shell uses a drawer and hides the desktop sidebar', (
+    tester,
+  ) async {
     final harness = TestRuntimeHarness();
     addTearDown(harness.dispose);
     tester.view.physicalSize = const Size(500, 900);
@@ -109,11 +112,14 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('selecting a non-INBOX folder invokes PollFolderUseCase',
-      (tester) async {
+  testWidgets('selecting a non-INBOX folder invokes PollFolderUseCase', (
+    tester,
+  ) async {
     final fixture = await MailFixture.create();
     addTearDown(fixture.dispose);
-    await fixture.database.into(fixture.database.dbFolders).insert(
+    await fixture.database
+        .into(fixture.database.dbFolders)
+        .insert(
           DbFoldersCompanion.insert(
             id: 'sent-folder',
             accountId: fixture.account.id,
@@ -173,11 +179,14 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   });
-  testWidgets('selected reading pane resets when folder changes',
-      (tester) async {
+  testWidgets('selected reading pane resets when folder changes', (
+    tester,
+  ) async {
     final fixture = await MailFixture.create();
     addTearDown(fixture.dispose);
-    await fixture.database.into(fixture.database.dbFolders).insert(
+    await fixture.database
+        .into(fixture.database.dbFolders)
+        .insert(
           DbFoldersCompanion.insert(
             id: 'sent-folder',
             accountId: fixture.account.id,
@@ -225,9 +234,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(
-      find.byKey(
-        ValueKey('email-tile-${fixture.account.id}-1'),
-      ),
+      find.byKey(ValueKey('email-tile-${fixture.account.id}-1')),
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('safe-html-widget')), findsOneWidget);
@@ -240,8 +247,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('responsive boundaries render without overflow',
-      (tester) async {
+  testWidgets('responsive boundaries render without overflow', (tester) async {
     for (final width in <double>[960, 959, 500, 360, 320]) {
       final harness = TestRuntimeHarness();
       addTearDown(harness.dispose);
@@ -325,9 +331,9 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-
-  testWidgets('sidebar shows outbox badge and opens the outbox page',
-      (tester) async {
+  testWidgets('sidebar shows outbox badge and opens the outbox page', (
+    tester,
+  ) async {
     final fixture = await MailFixture.create();
     addTearDown(fixture.dispose);
     final auth = FakeAuthRepository()..accounts.add(fixture.account);
@@ -397,9 +403,7 @@ void main() {
         overrides: [
           appRuntimeProvider.overrideWithValue(harness.runtime),
           outboxCountsProvider.overrideWith(
-            (ref) => Stream<OutboxCounts>.value(
-              const OutboxCounts(failed: 1),
-            ),
+            (ref) => Stream<OutboxCounts>.value(const OutboxCounts(failed: 1)),
           ),
           outboxMessagesProvider.overrideWith(
             (ref) => Stream<List<OutboxMessage>>.value(const []),
@@ -434,5 +438,4 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   });
-
 }

@@ -9,7 +9,13 @@ class MailFolderSyncResult {
     required this.isFullSnapshot,
     this.recentWindowMinUid,
     this.recentWindowMaxUid,
+    this.reconciledFlags = const {},
+    this.reconciledUids = const {},
   });
+
+  /// Only these explicitly requested cached UIDs may be pruned.
+  final Set<int> reconciledUids;
+  final Map<int, List<String>> reconciledFlags;
 
   final RemoteMailboxStatus status;
 

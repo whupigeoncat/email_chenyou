@@ -23,6 +23,7 @@ class MailAccount {
     required this.smtpImplicitTls,
     required this.createdAt,
     this.isEnabled = true,
+    this.saveSentCopy = false,
   });
 
   final String id;
@@ -38,6 +39,7 @@ class MailAccount {
   final int smtpPort;
   final bool smtpImplicitTls;
   final bool isEnabled;
+  final bool saveSentCopy;
   final DateTime createdAt;
 
   ProviderPreset get preset => ProviderPresets.byType(providerType);
@@ -57,6 +59,7 @@ class MailAccount {
     int? smtpPort,
     bool? smtpImplicitTls,
     bool? isEnabled,
+    bool? saveSentCopy,
   }) {
     return MailAccount(
       id: id,
@@ -72,6 +75,7 @@ class MailAccount {
       smtpPort: smtpPort ?? this.smtpPort,
       smtpImplicitTls: smtpImplicitTls ?? this.smtpImplicitTls,
       isEnabled: isEnabled ?? this.isEnabled,
+      saveSentCopy: saveSentCopy ?? this.saveSentCopy,
       createdAt: createdAt,
     );
   }
@@ -93,24 +97,26 @@ class MailAccount {
         other.smtpPort == smtpPort &&
         other.smtpImplicitTls == smtpImplicitTls &&
         other.isEnabled == isEnabled &&
+        other.saveSentCopy == saveSentCopy &&
         other.createdAt == createdAt;
   }
 
   @override
   int get hashCode => Object.hash(
-        id,
-        email,
-        displayName,
-        providerType,
-        authType,
-        colorValue,
-        imapHost,
-        imapPort,
-        imapImplicitTls,
-        smtpHost,
-        smtpPort,
-        smtpImplicitTls,
-        isEnabled,
-        createdAt,
-      );
+    id,
+    email,
+    displayName,
+    providerType,
+    authType,
+    colorValue,
+    imapHost,
+    imapPort,
+    imapImplicitTls,
+    smtpHost,
+    smtpPort,
+    smtpImplicitTls,
+    isEnabled,
+    saveSentCopy,
+    createdAt,
+  );
 }

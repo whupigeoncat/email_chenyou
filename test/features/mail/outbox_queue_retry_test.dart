@@ -89,6 +89,15 @@ class _MemoryOutboxRepository implements OutboxRepository {
   }
 
   @override
+  Future<void> recordSentCopy(
+    String id, {
+    required bool saved,
+    String? error,
+  }) async {
+    message = message.copyWith(sentCopySaved: saved, lastError: error);
+  }
+
+  @override
   Future<void> markSent(String id) async {
     message = message.copyWith(
       status: OutboxStatus.sent,
@@ -111,10 +120,7 @@ class _MemoryOutboxRepository implements OutboxRepository {
 
   @override
   Future<void> markQueued(String id) async {
-    message = message.copyWith(
-      status: OutboxStatus.queued,
-      retryable: true,
-    );
+    message = message.copyWith(status: OutboxStatus.queued, retryable: true);
   }
 
   @override
@@ -165,8 +171,7 @@ class _MemoryOutboxRepository implements OutboxRepository {
   Future<List<OutboxMessage>> getMessages({
     String? accountId,
     Set<OutboxStatus>? statuses,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Stream<OutboxCounts> watchCounts({String? accountId}) =>
@@ -424,7 +429,6 @@ void main() {
     });
   });
 
-
   test('saving a failed row as draft cancels the pending retry timer', () {
     fakeAsync((async) {
       final repository = _MemoryOutboxRepository(_message());
@@ -434,7 +438,8 @@ void main() {
           retryable: true,
           userMessage: 'temporary',
         );
-      final auth = FakeAuthRepository()..accounts.add(buildTestAccount(id: 'acc-1'));
+      final auth = FakeAuthRepository()
+        ..accounts.add(buildTestAccount(id: 'acc-1'));
       final queue = _buildQueue(repository, smtp, auth);
 
       unawaited(queue.scheduleNow(repository.message.id));
@@ -467,7 +472,8 @@ void main() {
           retryable: true,
           userMessage: 'temporary',
         );
-      final auth = FakeAuthRepository()..accounts.add(buildTestAccount(id: 'acc-1'));
+      final auth = FakeAuthRepository()
+        ..accounts.add(buildTestAccount(id: 'acc-1'));
       final queue = _buildQueue(repository, smtp, auth);
 
       unawaited(queue.scheduleNow(repository.message.id));
@@ -485,43 +491,45 @@ void main() {
     });
   });
 
-  test('scheduleNow and _process refuse draft and non-retryable failed rows',
-      () {
-    fakeAsync((async) {
-      final draftRepo = _MemoryOutboxRepository(
-        _message(status: OutboxStatus.draft),
-      );
-      final draftSmtp = _FakeSmtpSession();
-      final draftAuth =
-          FakeAuthRepository()..accounts.add(buildTestAccount(id: 'acc-1'));
-      final draftQueue = _buildQueue(draftRepo, draftSmtp, draftAuth);
-      unawaited(draftQueue.scheduleNow(draftRepo.message.id));
-      async.flushMicrotasks();
-      expect(draftSmtp.sendCount, 0);
+  test(
+    'scheduleNow and _process refuse draft and non-retryable failed rows',
+    () {
+      fakeAsync((async) {
+        final draftRepo = _MemoryOutboxRepository(
+          _message(status: OutboxStatus.draft),
+        );
+        final draftSmtp = _FakeSmtpSession();
+        final draftAuth = FakeAuthRepository()
+          ..accounts.add(buildTestAccount(id: 'acc-1'));
+        final draftQueue = _buildQueue(draftRepo, draftSmtp, draftAuth);
+        unawaited(draftQueue.scheduleNow(draftRepo.message.id));
+        async.flushMicrotasks();
+        expect(draftSmtp.sendCount, 0);
 
-      final failedRepo = _MemoryOutboxRepository(
-        _message(status: OutboxStatus.failed, retryable: false),
-      );
-      final failedSmtp = _FakeSmtpSession();
-      final failedAuth =
-          FakeAuthRepository()..accounts.add(buildTestAccount(id: 'acc-1'));
-      final failedQueue = _buildQueue(failedRepo, failedSmtp, failedAuth);
-      unawaited(failedQueue.scheduleNow(failedRepo.message.id));
-      async.flushMicrotasks();
-      expect(failedSmtp.sendCount, 0);
+        final failedRepo = _MemoryOutboxRepository(
+          _message(status: OutboxStatus.failed, retryable: false),
+        );
+        final failedSmtp = _FakeSmtpSession();
+        final failedAuth = FakeAuthRepository()
+          ..accounts.add(buildTestAccount(id: 'acc-1'));
+        final failedQueue = _buildQueue(failedRepo, failedSmtp, failedAuth);
+        unawaited(failedQueue.scheduleNow(failedRepo.message.id));
+        async.flushMicrotasks();
+        expect(failedSmtp.sendCount, 0);
 
-      unawaited(draftQueue.dispose());
-      unawaited(failedQueue.dispose());
-      async.flushMicrotasks();
-    });
-  });
+        unawaited(draftQueue.dispose());
+        unawaited(failedQueue.dispose());
+        async.flushMicrotasks();
+      });
+    },
+  );
 
   test('concurrent draft flip before _process is rejected', () {
     fakeAsync((async) {
       final repository = _FlipToDraftRepository(_message());
       final smtp = _FakeSmtpSession();
-      final auth =
-          FakeAuthRepository()..accounts.add(buildTestAccount(id: 'acc-1'));
+      final auth = FakeAuthRepository()
+        ..accounts.add(buildTestAccount(id: 'acc-1'));
       final queue = _buildQueue(repository, smtp, auth);
 
       unawaited(queue.scheduleNow(repository.message.id));
@@ -534,48 +542,49 @@ void main() {
     });
   });
 
-  test('manual retry after a failed timer resends once and clears old timer',
-      () {
-    fakeAsync((async) {
-      final repository = _MemoryOutboxRepository(_message());
-      final smtp = _FakeSmtpSession()
-        ..error = const SmtpFailure(
-          reason: SmtpFailureReason.protocolError,
-          retryable: true,
-          userMessage: 'temporary',
-        );
-      final auth =
-          FakeAuthRepository()..accounts.add(buildTestAccount(id: 'acc-1'));
-      final queue = _buildQueue(repository, smtp, auth);
+  test(
+    'manual retry after a failed timer resends once and clears old timer',
+    () {
+      fakeAsync((async) {
+        final repository = _MemoryOutboxRepository(_message());
+        final smtp = _FakeSmtpSession()
+          ..error = const SmtpFailure(
+            reason: SmtpFailureReason.protocolError,
+            retryable: true,
+            userMessage: 'temporary',
+          );
+        final auth = FakeAuthRepository()
+          ..accounts.add(buildTestAccount(id: 'acc-1'));
+        final queue = _buildQueue(repository, smtp, auth);
 
-      unawaited(queue.scheduleNow(repository.message.id));
-      async.flushMicrotasks();
-      expect(smtp.sendCount, 1);
-      expect(repository.message.status, OutboxStatus.failed);
+        unawaited(queue.scheduleNow(repository.message.id));
+        async.flushMicrotasks();
+        expect(smtp.sendCount, 1);
+        expect(repository.message.status, OutboxStatus.failed);
 
-      smtp.error = null;
-      unawaited(queue.retryNow(repository.message.id));
-      async.flushMicrotasks();
-      expect(smtp.sendCount, 2);
-      expect(repository.message.status, OutboxStatus.sent);
+        smtp.error = null;
+        unawaited(queue.retryNow(repository.message.id));
+        async.flushMicrotasks();
+        expect(smtp.sendCount, 2);
+        expect(repository.message.status, OutboxStatus.sent);
 
-      async.elapse(const Duration(seconds: 30));
-      async.elapse(const Duration(minutes: 5));
-      async.flushMicrotasks();
-      expect(smtp.sendCount, 2);
+        async.elapse(const Duration(seconds: 30));
+        async.elapse(const Duration(minutes: 5));
+        async.flushMicrotasks();
+        expect(smtp.sendCount, 2);
 
-      unawaited(queue.dispose());
-      async.flushMicrotasks();
-    });
-  });
-
+        unawaited(queue.dispose());
+        async.flushMicrotasks();
+      });
+    },
+  );
 
   test('post-send hook failure never requeues an already sent message', () {
     fakeAsync((async) {
       final repository = _MemoryOutboxRepository(_message());
       final smtp = _FakeSmtpSession();
-      final auth =
-          FakeAuthRepository()..accounts.add(buildTestAccount(id: 'acc-1'));
+      final auth = FakeAuthRepository()
+        ..accounts.add(buildTestAccount(id: 'acc-1'));
       final queue = OutboxQueueService(
         repository: repository,
         sessionFactory: _FakeSmtpFactory(smtp),
@@ -604,5 +613,4 @@ void main() {
       async.flushMicrotasks();
     });
   });
-
 }

@@ -143,6 +143,21 @@ class $DbAccountsTable extends DbAccounts
       'CHECK ("smtp_implicit_tls" IN (0, 1))',
     ),
   );
+  static const VerificationMeta _saveSentCopyMeta = const VerificationMeta(
+    'saveSentCopy',
+  );
+  @override
+  late final GeneratedColumn<bool> saveSentCopy = GeneratedColumn<bool>(
+    'save_sent_copy',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("save_sent_copy" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _isEnabledMeta = const VerificationMeta(
     'isEnabled',
   );
@@ -183,6 +198,7 @@ class $DbAccountsTable extends DbAccounts
     smtpHost,
     smtpPort,
     smtpImplicitTls,
+    saveSentCopy,
     isEnabled,
     createdAt,
   ];
@@ -303,6 +319,15 @@ class $DbAccountsTable extends DbAccounts
     } else if (isInserting) {
       context.missing(_smtpImplicitTlsMeta);
     }
+    if (data.containsKey('save_sent_copy')) {
+      context.handle(
+        _saveSentCopyMeta,
+        saveSentCopy.isAcceptableOrUnknown(
+          data['save_sent_copy']!,
+          _saveSentCopyMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_enabled')) {
       context.handle(
         _isEnabledMeta,
@@ -374,6 +399,10 @@ class $DbAccountsTable extends DbAccounts
         DriftSqlType.bool,
         data['${effectivePrefix}smtp_implicit_tls'],
       )!,
+      saveSentCopy: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}save_sent_copy'],
+      )!,
       isEnabled: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_enabled'],
@@ -404,6 +433,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
   final String smtpHost;
   final int smtpPort;
   final bool smtpImplicitTls;
+  final bool saveSentCopy;
   final bool isEnabled;
   final int createdAt;
   const DbAccount({
@@ -419,6 +449,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
     required this.smtpHost,
     required this.smtpPort,
     required this.smtpImplicitTls,
+    required this.saveSentCopy,
     required this.isEnabled,
     required this.createdAt,
   });
@@ -437,6 +468,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
     map['smtp_host'] = Variable<String>(smtpHost);
     map['smtp_port'] = Variable<int>(smtpPort);
     map['smtp_implicit_tls'] = Variable<bool>(smtpImplicitTls);
+    map['save_sent_copy'] = Variable<bool>(saveSentCopy);
     map['is_enabled'] = Variable<bool>(isEnabled);
     map['created_at'] = Variable<int>(createdAt);
     return map;
@@ -456,6 +488,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
       smtpHost: Value(smtpHost),
       smtpPort: Value(smtpPort),
       smtpImplicitTls: Value(smtpImplicitTls),
+      saveSentCopy: Value(saveSentCopy),
       isEnabled: Value(isEnabled),
       createdAt: Value(createdAt),
     );
@@ -479,6 +512,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
       smtpHost: serializer.fromJson<String>(json['smtpHost']),
       smtpPort: serializer.fromJson<int>(json['smtpPort']),
       smtpImplicitTls: serializer.fromJson<bool>(json['smtpImplicitTls']),
+      saveSentCopy: serializer.fromJson<bool>(json['saveSentCopy']),
       isEnabled: serializer.fromJson<bool>(json['isEnabled']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
     );
@@ -499,6 +533,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
       'smtpHost': serializer.toJson<String>(smtpHost),
       'smtpPort': serializer.toJson<int>(smtpPort),
       'smtpImplicitTls': serializer.toJson<bool>(smtpImplicitTls),
+      'saveSentCopy': serializer.toJson<bool>(saveSentCopy),
       'isEnabled': serializer.toJson<bool>(isEnabled),
       'createdAt': serializer.toJson<int>(createdAt),
     };
@@ -517,6 +552,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
     String? smtpHost,
     int? smtpPort,
     bool? smtpImplicitTls,
+    bool? saveSentCopy,
     bool? isEnabled,
     int? createdAt,
   }) => DbAccount(
@@ -532,6 +568,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
     smtpHost: smtpHost ?? this.smtpHost,
     smtpPort: smtpPort ?? this.smtpPort,
     smtpImplicitTls: smtpImplicitTls ?? this.smtpImplicitTls,
+    saveSentCopy: saveSentCopy ?? this.saveSentCopy,
     isEnabled: isEnabled ?? this.isEnabled,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -559,6 +596,9 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
       smtpImplicitTls: data.smtpImplicitTls.present
           ? data.smtpImplicitTls.value
           : this.smtpImplicitTls,
+      saveSentCopy: data.saveSentCopy.present
+          ? data.saveSentCopy.value
+          : this.saveSentCopy,
       isEnabled: data.isEnabled.present ? data.isEnabled.value : this.isEnabled,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -579,6 +619,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
           ..write('smtpHost: $smtpHost, ')
           ..write('smtpPort: $smtpPort, ')
           ..write('smtpImplicitTls: $smtpImplicitTls, ')
+          ..write('saveSentCopy: $saveSentCopy, ')
           ..write('isEnabled: $isEnabled, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -599,6 +640,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
     smtpHost,
     smtpPort,
     smtpImplicitTls,
+    saveSentCopy,
     isEnabled,
     createdAt,
   );
@@ -618,6 +660,7 @@ class DbAccount extends DataClass implements Insertable<DbAccount> {
           other.smtpHost == this.smtpHost &&
           other.smtpPort == this.smtpPort &&
           other.smtpImplicitTls == this.smtpImplicitTls &&
+          other.saveSentCopy == this.saveSentCopy &&
           other.isEnabled == this.isEnabled &&
           other.createdAt == this.createdAt);
 }
@@ -635,6 +678,7 @@ class DbAccountsCompanion extends UpdateCompanion<DbAccount> {
   final Value<String> smtpHost;
   final Value<int> smtpPort;
   final Value<bool> smtpImplicitTls;
+  final Value<bool> saveSentCopy;
   final Value<bool> isEnabled;
   final Value<int> createdAt;
   final Value<int> rowid;
@@ -651,6 +695,7 @@ class DbAccountsCompanion extends UpdateCompanion<DbAccount> {
     this.smtpHost = const Value.absent(),
     this.smtpPort = const Value.absent(),
     this.smtpImplicitTls = const Value.absent(),
+    this.saveSentCopy = const Value.absent(),
     this.isEnabled = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -668,6 +713,7 @@ class DbAccountsCompanion extends UpdateCompanion<DbAccount> {
     required String smtpHost,
     required int smtpPort,
     required bool smtpImplicitTls,
+    this.saveSentCopy = const Value.absent(),
     this.isEnabled = const Value.absent(),
     required int createdAt,
     this.rowid = const Value.absent(),
@@ -697,6 +743,7 @@ class DbAccountsCompanion extends UpdateCompanion<DbAccount> {
     Expression<String>? smtpHost,
     Expression<int>? smtpPort,
     Expression<bool>? smtpImplicitTls,
+    Expression<bool>? saveSentCopy,
     Expression<bool>? isEnabled,
     Expression<int>? createdAt,
     Expression<int>? rowid,
@@ -714,6 +761,7 @@ class DbAccountsCompanion extends UpdateCompanion<DbAccount> {
       if (smtpHost != null) 'smtp_host': smtpHost,
       if (smtpPort != null) 'smtp_port': smtpPort,
       if (smtpImplicitTls != null) 'smtp_implicit_tls': smtpImplicitTls,
+      if (saveSentCopy != null) 'save_sent_copy': saveSentCopy,
       if (isEnabled != null) 'is_enabled': isEnabled,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -733,6 +781,7 @@ class DbAccountsCompanion extends UpdateCompanion<DbAccount> {
     Value<String>? smtpHost,
     Value<int>? smtpPort,
     Value<bool>? smtpImplicitTls,
+    Value<bool>? saveSentCopy,
     Value<bool>? isEnabled,
     Value<int>? createdAt,
     Value<int>? rowid,
@@ -750,6 +799,7 @@ class DbAccountsCompanion extends UpdateCompanion<DbAccount> {
       smtpHost: smtpHost ?? this.smtpHost,
       smtpPort: smtpPort ?? this.smtpPort,
       smtpImplicitTls: smtpImplicitTls ?? this.smtpImplicitTls,
+      saveSentCopy: saveSentCopy ?? this.saveSentCopy,
       isEnabled: isEnabled ?? this.isEnabled,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -795,6 +845,9 @@ class DbAccountsCompanion extends UpdateCompanion<DbAccount> {
     if (smtpImplicitTls.present) {
       map['smtp_implicit_tls'] = Variable<bool>(smtpImplicitTls.value);
     }
+    if (saveSentCopy.present) {
+      map['save_sent_copy'] = Variable<bool>(saveSentCopy.value);
+    }
     if (isEnabled.present) {
       map['is_enabled'] = Variable<bool>(isEnabled.value);
     }
@@ -822,6 +875,7 @@ class DbAccountsCompanion extends UpdateCompanion<DbAccount> {
           ..write('smtpHost: $smtpHost, ')
           ..write('smtpPort: $smtpPort, ')
           ..write('smtpImplicitTls: $smtpImplicitTls, ')
+          ..write('saveSentCopy: $saveSentCopy, ')
           ..write('isEnabled: $isEnabled, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -3427,6 +3481,21 @@ class $DbOutboxMessagesTable extends DbOutboxMessages
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _sentCopySavedMeta = const VerificationMeta(
+    'sentCopySaved',
+  );
+  @override
+  late final GeneratedColumn<bool> sentCopySaved = GeneratedColumn<bool>(
+    'sent_copy_saved',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("sent_copy_saved" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _sentAtMeta = const VerificationMeta('sentAt');
   @override
   late final GeneratedColumn<int> sentAt = GeneratedColumn<int>(
@@ -3459,6 +3528,7 @@ class $DbOutboxMessagesTable extends DbOutboxMessages
     lastError,
     createdAt,
     updatedAt,
+    sentCopySaved,
     sentAt,
   ];
   @override
@@ -3638,6 +3708,15 @@ class $DbOutboxMessagesTable extends DbOutboxMessages
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('sent_copy_saved')) {
+      context.handle(
+        _sentCopySavedMeta,
+        sentCopySaved.isAcceptableOrUnknown(
+          data['sent_copy_saved']!,
+          _sentCopySavedMeta,
+        ),
+      );
+    }
     if (data.containsKey('sent_at')) {
       context.handle(
         _sentAtMeta,
@@ -3737,6 +3816,10 @@ class $DbOutboxMessagesTable extends DbOutboxMessages
         DriftSqlType.int,
         data['${effectivePrefix}updated_at'],
       )!,
+      sentCopySaved: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}sent_copy_saved'],
+      )!,
       sentAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sent_at'],
@@ -3772,6 +3855,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
   final String? lastError;
   final int createdAt;
   final int updatedAt;
+  final bool sentCopySaved;
   final int? sentAt;
   const DbOutboxMessage({
     required this.id,
@@ -3795,6 +3879,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
     this.lastError,
     required this.createdAt,
     required this.updatedAt,
+    required this.sentCopySaved,
     this.sentAt,
   });
   @override
@@ -3835,6 +3920,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
     }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
+    map['sent_copy_saved'] = Variable<bool>(sentCopySaved);
     if (!nullToAbsent || sentAt != null) {
       map['sent_at'] = Variable<int>(sentAt);
     }
@@ -3878,6 +3964,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
           : Value(lastError),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      sentCopySaved: Value(sentCopySaved),
       sentAt: sentAt == null && nullToAbsent
           ? const Value.absent()
           : Value(sentAt),
@@ -3913,6 +4000,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
       lastError: serializer.fromJson<String?>(json['lastError']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      sentCopySaved: serializer.fromJson<bool>(json['sentCopySaved']),
       sentAt: serializer.fromJson<int?>(json['sentAt']),
     );
   }
@@ -3941,6 +4029,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
       'lastError': serializer.toJson<String?>(lastError),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
+      'sentCopySaved': serializer.toJson<bool>(sentCopySaved),
       'sentAt': serializer.toJson<int?>(sentAt),
     };
   }
@@ -3967,6 +4056,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
     Value<String?> lastError = const Value.absent(),
     int? createdAt,
     int? updatedAt,
+    bool? sentCopySaved,
     Value<int?> sentAt = const Value.absent(),
   }) => DbOutboxMessage(
     id: id ?? this.id,
@@ -3996,6 +4086,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
     lastError: lastError.present ? lastError.value : this.lastError,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    sentCopySaved: sentCopySaved ?? this.sentCopySaved,
     sentAt: sentAt.present ? sentAt.value : this.sentAt,
   );
   DbOutboxMessage copyWithCompanion(DbOutboxMessagesCompanion data) {
@@ -4035,6 +4126,9 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
       lastError: data.lastError.present ? data.lastError.value : this.lastError,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      sentCopySaved: data.sentCopySaved.present
+          ? data.sentCopySaved.value
+          : this.sentCopySaved,
       sentAt: data.sentAt.present ? data.sentAt.value : this.sentAt,
     );
   }
@@ -4063,6 +4157,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
           ..write('lastError: $lastError, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('sentCopySaved: $sentCopySaved, ')
           ..write('sentAt: $sentAt')
           ..write(')'))
         .toString();
@@ -4091,6 +4186,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
     lastError,
     createdAt,
     updatedAt,
+    sentCopySaved,
     sentAt,
   ]);
   @override
@@ -4118,6 +4214,7 @@ class DbOutboxMessage extends DataClass implements Insertable<DbOutboxMessage> {
           other.lastError == this.lastError &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
+          other.sentCopySaved == this.sentCopySaved &&
           other.sentAt == this.sentAt);
 }
 
@@ -4143,6 +4240,7 @@ class DbOutboxMessagesCompanion extends UpdateCompanion<DbOutboxMessage> {
   final Value<String?> lastError;
   final Value<int> createdAt;
   final Value<int> updatedAt;
+  final Value<bool> sentCopySaved;
   final Value<int?> sentAt;
   final Value<int> rowid;
   const DbOutboxMessagesCompanion({
@@ -4167,6 +4265,7 @@ class DbOutboxMessagesCompanion extends UpdateCompanion<DbOutboxMessage> {
     this.lastError = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.sentCopySaved = const Value.absent(),
     this.sentAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -4192,6 +4291,7 @@ class DbOutboxMessagesCompanion extends UpdateCompanion<DbOutboxMessage> {
     this.lastError = const Value.absent(),
     required int createdAt,
     required int updatedAt,
+    this.sentCopySaved = const Value.absent(),
     this.sentAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -4228,6 +4328,7 @@ class DbOutboxMessagesCompanion extends UpdateCompanion<DbOutboxMessage> {
     Expression<String>? lastError,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
+    Expression<bool>? sentCopySaved,
     Expression<int>? sentAt,
     Expression<int>? rowid,
   }) {
@@ -4254,6 +4355,7 @@ class DbOutboxMessagesCompanion extends UpdateCompanion<DbOutboxMessage> {
       if (lastError != null) 'last_error': lastError,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (sentCopySaved != null) 'sent_copy_saved': sentCopySaved,
       if (sentAt != null) 'sent_at': sentAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -4281,6 +4383,7 @@ class DbOutboxMessagesCompanion extends UpdateCompanion<DbOutboxMessage> {
     Value<String?>? lastError,
     Value<int>? createdAt,
     Value<int>? updatedAt,
+    Value<bool>? sentCopySaved,
     Value<int?>? sentAt,
     Value<int>? rowid,
   }) {
@@ -4306,6 +4409,7 @@ class DbOutboxMessagesCompanion extends UpdateCompanion<DbOutboxMessage> {
       lastError: lastError ?? this.lastError,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      sentCopySaved: sentCopySaved ?? this.sentCopySaved,
       sentAt: sentAt ?? this.sentAt,
       rowid: rowid ?? this.rowid,
     );
@@ -4377,6 +4481,9 @@ class DbOutboxMessagesCompanion extends UpdateCompanion<DbOutboxMessage> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<int>(updatedAt.value);
     }
+    if (sentCopySaved.present) {
+      map['sent_copy_saved'] = Variable<bool>(sentCopySaved.value);
+    }
     if (sentAt.present) {
       map['sent_at'] = Variable<int>(sentAt.value);
     }
@@ -4410,6 +4517,7 @@ class DbOutboxMessagesCompanion extends UpdateCompanion<DbOutboxMessage> {
           ..write('lastError: $lastError, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('sentCopySaved: $sentCopySaved, ')
           ..write('sentAt: $sentAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -4540,6 +4648,7 @@ typedef $$DbAccountsTableCreateCompanionBuilder = DbAccountsCompanion Function({
   required String smtpHost,
   required int smtpPort,
   required bool smtpImplicitTls,
+  Value<bool> saveSentCopy,
   Value<bool> isEnabled,
   required int createdAt,
   Value<int> rowid,
@@ -4557,6 +4666,7 @@ typedef $$DbAccountsTableUpdateCompanionBuilder = DbAccountsCompanion Function({
   Value<String> smtpHost,
   Value<int> smtpPort,
   Value<bool> smtpImplicitTls,
+  Value<bool> saveSentCopy,
   Value<bool> isEnabled,
   Value<int> createdAt,
   Value<int> rowid,
@@ -4690,6 +4800,11 @@ class $$DbAccountsTableFilterComposer
 
   ColumnFilters<bool> get smtpImplicitTls => $composableBuilder(
     column: $table.smtpImplicitTls,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get saveSentCopy => $composableBuilder(
+    column: $table.saveSentCopy,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4848,6 +4963,11 @@ class $$DbAccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get saveSentCopy => $composableBuilder(
+    column: $table.saveSentCopy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isEnabled => $composableBuilder(
     column: $table.isEnabled,
     builder: (column) => ColumnOrderings(column),
@@ -4911,6 +5031,11 @@ class $$DbAccountsTableAnnotationComposer
 
   GeneratedColumn<bool> get smtpImplicitTls => $composableBuilder(
     column: $table.smtpImplicitTls,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get saveSentCopy => $composableBuilder(
+    column: $table.saveSentCopy,
     builder: (column) => column,
   );
 
@@ -5040,6 +5165,7 @@ class $$DbAccountsTableTableManager
                 Value<String> smtpHost = const Value.absent(),
                 Value<int> smtpPort = const Value.absent(),
                 Value<bool> smtpImplicitTls = const Value.absent(),
+                Value<bool> saveSentCopy = const Value.absent(),
                 Value<bool> isEnabled = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -5056,6 +5182,7 @@ class $$DbAccountsTableTableManager
                 smtpHost: smtpHost,
                 smtpPort: smtpPort,
                 smtpImplicitTls: smtpImplicitTls,
+                saveSentCopy: saveSentCopy,
                 isEnabled: isEnabled,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -5074,6 +5201,7 @@ class $$DbAccountsTableTableManager
                 required String smtpHost,
                 required int smtpPort,
                 required bool smtpImplicitTls,
+                Value<bool> saveSentCopy = const Value.absent(),
                 Value<bool> isEnabled = const Value.absent(),
                 required int createdAt,
                 Value<int> rowid = const Value.absent(),
@@ -5090,6 +5218,7 @@ class $$DbAccountsTableTableManager
                 smtpHost: smtpHost,
                 smtpPort: smtpPort,
                 smtpImplicitTls: smtpImplicitTls,
+                saveSentCopy: saveSentCopy,
                 isEnabled: isEnabled,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -7009,6 +7138,7 @@ typedef $$DbOutboxMessagesTableCreateCompanionBuilder =
       Value<String?> lastError,
       required int createdAt,
       required int updatedAt,
+      Value<bool> sentCopySaved,
       Value<int?> sentAt,
       Value<int> rowid,
     });
@@ -7035,6 +7165,7 @@ typedef $$DbOutboxMessagesTableUpdateCompanionBuilder =
       Value<String?> lastError,
       Value<int> createdAt,
       Value<int> updatedAt,
+      Value<bool> sentCopySaved,
       Value<int?> sentAt,
       Value<int> rowid,
     });
@@ -7172,6 +7303,11 @@ class $$DbOutboxMessagesTableFilterComposer
 
   ColumnFilters<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get sentCopySaved => $composableBuilder(
+    column: $table.sentCopySaved,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7313,6 +7449,11 @@ class $$DbOutboxMessagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get sentCopySaved => $composableBuilder(
+    column: $table.sentCopySaved,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sentAt => $composableBuilder(
     column: $table.sentAt,
     builder: (column) => ColumnOrderings(column),
@@ -7425,6 +7566,11 @@ class $$DbOutboxMessagesTableAnnotationComposer
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
+  GeneratedColumn<bool> get sentCopySaved => $composableBuilder(
+    column: $table.sentCopySaved,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get sentAt =>
       $composableBuilder(column: $table.sentAt, builder: (column) => column);
 
@@ -7503,6 +7649,7 @@ class $$DbOutboxMessagesTableTableManager
                 Value<String?> lastError = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
+                Value<bool> sentCopySaved = const Value.absent(),
                 Value<int?> sentAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DbOutboxMessagesCompanion(
@@ -7527,6 +7674,7 @@ class $$DbOutboxMessagesTableTableManager
                 lastError: lastError,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                sentCopySaved: sentCopySaved,
                 sentAt: sentAt,
                 rowid: rowid,
               ),
@@ -7553,6 +7701,7 @@ class $$DbOutboxMessagesTableTableManager
                 Value<String?> lastError = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
+                Value<bool> sentCopySaved = const Value.absent(),
                 Value<int?> sentAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DbOutboxMessagesCompanion.insert(
@@ -7577,6 +7726,7 @@ class $$DbOutboxMessagesTableTableManager
                 lastError: lastError,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                sentCopySaved: sentCopySaved,
                 sentAt: sentAt,
                 rowid: rowid,
               ),

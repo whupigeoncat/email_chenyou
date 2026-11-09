@@ -10,11 +10,7 @@ import '../widgets/account_color_badge.dart';
 import 'email_detail_page.dart';
 
 class UnifiedInboxPage extends ConsumerWidget {
-  const UnifiedInboxPage({
-    super.key,
-    this.embedded = false,
-    this.onOpenEmail,
-  });
+  const UnifiedInboxPage({super.key, this.embedded = false, this.onOpenEmail});
 
   final bool embedded;
   final ValueChanged<UnifiedEmail>? onOpenEmail;
@@ -46,21 +42,21 @@ class UnifiedInboxPage extends ConsumerWidget {
           ),
         Expanded(
           child: emails.when(
+            skipLoadingOnReload: true,
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stackTrace) => Center(
-              child: Text('读取邮件失败：$error'),
-            ),
+            error: (error, stackTrace) => Center(child: Text('读取邮件失败：$error')),
             data: (items) {
               if (items.isEmpty) {
                 return RefreshIndicator(
                   onRefresh: notifier.syncCurrent,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: const [
-                      SizedBox(height: 100),
-                      Icon(Icons.mark_email_read_outlined, size: 48),
-                      SizedBox(height: 12),
-                      Center(child: Text('这里暂时没有邮件')),
+                    children: [
+                      const SizedBox(height: 100),
+                      const Icon(Icons.mark_email_read_outlined, size: 48),
+                      const SizedBox(height: 12),
+                      const Center(child: Text('这里暂时没有邮件')),
+                      _HistoryButton(view: view, onLoad: notifier.loadMore),
                     ],
                   ),
                 );
@@ -68,7 +64,7 @@ class UnifiedInboxPage extends ConsumerWidget {
               return NotificationListener<ScrollEndNotification>(
                 onNotification: (notification) {
                   if (notification.metrics.extentAfter < 300) {
-                    notifier.loadMore();
+                    unawaited(notifier.loadMore());
                   }
                   return false;
                 },
@@ -78,9 +74,15 @@ class UnifiedInboxPage extends ConsumerWidget {
                     key: const Key('inbox-email-list'),
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemCount: items.length,
+                    itemCount: items.length + 1,
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
+                      if (index == items.length) {
+                        return _HistoryButton(
+                          view: view,
+                          onLoad: notifier.loadMore,
+                        );
+                      }
                       final email = items[index];
                       return _EmailTile(
                         key: ValueKey(
@@ -208,10 +210,8 @@ class _EmailTile extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         tileColor: unread
-            ? Theme.of(context)
-                .colorScheme
-                .primaryContainer
-                .withValues(alpha: 0.16)
+            ? Theme.of(context).colorScheme.primaryContainer
+                  .withValues(alpha: 0.16)
             : null,
         leading: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -256,4 +256,26 @@ class _EmailTile extends StatelessWidget {
     }
     return DateFormat('MM/dd').format(date.toLocal());
   }
+}
+
+class _HistoryButton extends StatelessWidget {
+  const _HistoryButton({required this.view, required this.onLoad});
+  final UnifiedInboxViewState view;
+  final Future<void> Function() onLoad;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(12),
+    child: TextButton.icon(
+      key: const Key('load-older-emails'),
+      onPressed: view.isLoadingMore || view.isSyncing ? null : onLoad,
+      icon: view.isLoadingMore
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.history),
+      label: Text(view.isLoadingMore ? '正在加载历史邮件…' : '加载更早邮件'),
+    ),
+  );
 }

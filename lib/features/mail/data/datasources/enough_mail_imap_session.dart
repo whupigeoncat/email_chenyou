@@ -215,7 +215,7 @@ class EnoughMailImapSession implements ImapSession {
       _logger.debug(
         'ImapSession:${_account?.id ?? "unknown"}',
         'SELECT $remoteFolderName ok (exists=${status.messagesExists}, '
-        'unseen=${status.messagesUnseen})',
+            'unseen=${status.messagesUnseen})',
       );
       return status;
     });
@@ -274,6 +274,86 @@ class EnoughMailImapSession implements ImapSession {
           .uidFetchMessages(sequence, _headerFetchDefinition)
           .timeout(_commandTimeout);
       return _mapFetchedMessages(result.messages, limit: limit);
+    });
+  }
+
+  @override
+  Future<List<RemoteFetchedMessage>> fetchOlderMessageHeaders({
+    required int beforeUid,
+    int limit = 200,
+  }) {
+    return _guard(authType: _account?.authType, () async {
+      if (beforeUid <= 1 || limit <= 0) return <RemoteFetchedMessage>[];
+      final result = await _client
+          .uidSearchMessages(searchCriteria: 'UID 1:${beforeUid - 1}')
+          .timeout(_commandTimeout);
+      final uids =
+          (result.matchingSequence?.toList() ?? <int>[])
+              .where((uid) => uid > 0 && uid < beforeUid)
+              .toList()
+            ..sort();
+      if (uids.isEmpty) return <RemoteFetchedMessage>[];
+      final page = uids.length > limit
+          ? uids.sublist(uids.length - limit)
+          : uids;
+      final fetched = await _client
+          .uidFetchMessages(
+            MessageSequence.fromIds(page, isUid: true),
+            _headerFetchDefinition,
+          )
+          .timeout(_commandTimeout);
+      return _mapFetchedMessages(
+        fetched.messages
+            .where((message) => page.contains(message.uid))
+            .toList(),
+        limit: limit,
+      );
+    });
+  }
+
+  @override
+  Future<Map<int, List<String>>> uidFetchFlags(List<int> uids) {
+    return _guard(authType: _account?.authType, () async {
+      if (uids.isEmpty) return <int, List<String>>{};
+      final result = await _client
+          .uidFetchMessages(
+            MessageSequence.fromIds(uids, isUid: true),
+            '(UID FLAGS)',
+          )
+          .timeout(_commandTimeout);
+      final requested = uids.toSet();
+      return <int, List<String>>{
+        for (final message in result.messages)
+          if (message.uid != null && requested.contains(message.uid))
+            message.uid!: List<String>.of(message.flags ?? const []),
+      };
+    });
+  }
+
+  @override
+  Future<bool> containsMessageId(String messageId) {
+    return _guard(authType: _account?.authType, () async {
+      if (messageId.isEmpty || messageId.contains(RegExp(r'[\r\n\u0000]'))) {
+        throw const StorageFailure(userMessage: '邮件 Message-ID 无效，无法核对已发送副本。');
+      }
+      final escaped = messageId.replaceAll('\\', r'\\').replaceAll('"', r'\"');
+      final result = await _client
+          .uidSearchMessages(searchCriteria: 'HEADER Message-ID "$escaped"')
+          .timeout(_commandTimeout);
+      return result.matchingSequence?.toList().isNotEmpty ?? false;
+    });
+  }
+
+  @override
+  Future<void> appendSentMessage(String mimeText, {DateTime? sentAt}) {
+    return _guard(authType: _account?.authType, () async {
+      await _client
+          .appendMessageText(
+            mimeText,
+            flags: const [r'\Seen'],
+            internalDate: sentAt,
+          )
+          .timeout(_commandTimeout);
     });
   }
 
@@ -376,10 +456,7 @@ class EnoughMailImapSession implements ImapSession {
           .idleStart(waitForContinuation: true)
           .timeout(_commandTimeout);
       _isIdle = true;
-      _logger.debug(
-        'ImapSession:${_account?.id ?? "unknown"}',
-        'IDLE started',
-      );
+      _logger.debug('ImapSession:${_account?.id ?? "unknown"}', 'IDLE started');
     });
   }
 

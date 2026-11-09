@@ -32,9 +32,9 @@ final class OAuthAccountCredential extends PendingAccountCredential {
 
   @override
   ResolvedAccountCredential toResolvedCredential() => OAuthCredential(
-        accessToken: tokens.accessToken,
-        expiresAt: tokens.expiresAt,
-      );
+    accessToken: tokens.accessToken,
+    expiresAt: tokens.expiresAt,
+  );
 }
 
 /// Non-persisted account form values used by the connection tester and wizard.
@@ -70,10 +70,7 @@ class MailAccountDraft {
 
   ProviderPreset get preset => ProviderPresets.byType(providerType);
 
-  MailAccount toAccount({
-    required String id,
-    required DateTime createdAt,
-  }) {
+  MailAccount toAccount({required String id, required DateTime createdAt}) {
     return MailAccount(
       id: id,
       email: email.trim(),
@@ -88,6 +85,7 @@ class MailAccountDraft {
       smtpPort: smtpPort,
       smtpImplicitTls: smtpImplicitTls,
       isEnabled: isEnabled,
+      saveSentCopy: providerType == MailProviderType.custom,
       createdAt: createdAt,
     );
   }

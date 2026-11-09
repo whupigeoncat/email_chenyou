@@ -165,65 +165,69 @@ NativeDatabase _fixtureDatabase(File file, int version, String sql) {
 }
 
 void main() {
-  test('real v2 database upgrades to v5, keeps rows/FTS and adds outbox',
-      () async {
-    final dir = Directory.systemTemp.createTempSync('outbox_migration_v2_');
-    addTearDown(() => dir.delete(recursive: true));
-    final file = File(p.join(dir.path, 'mail.sqlite'));
+  test(
+    'real v2 database upgrades to v6, keeps rows/FTS and adds outbox',
+    () async {
+      final dir = Directory.systemTemp.createTempSync('outbox_migration_v2_');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File(p.join(dir.path, 'mail.sqlite'));
 
-    final db = AppDatabase.forTesting(
-      _fixtureDatabase(
-        file,
-        2,
-        _baseSchema(withTrusted: true, withOutbox: false),
-      ),
-    );
-    addTearDown(db.close);
+      final db = AppDatabase.forTesting(
+        _fixtureDatabase(
+          file,
+          2,
+          _baseSchema(withTrusted: true, withOutbox: false),
+        ),
+      );
+      addTearDown(db.close);
 
-    final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 5);
-    expect(db.schemaVersion, 5);
-    expect((await db.select(db.dbEmails).get()).single.subject, 'Old report');
-    expect(
-      (await db.select(db.dbTrustedSenders).get()).single.senderEmail,
-      'trusted@example.com',
-    );
-    final fts = await db
-        .customSelect(
-          "SELECT COUNT(*) AS c FROM emails_fts WHERE emails_fts MATCH 'report'",
-        )
-        .getSingle();
-    expect(fts.read<int>('c'), 1);
+      final version = await db.customSelect('PRAGMA user_version').getSingle();
+      expect(version.read<int>('user_version'), 6);
+      expect(db.schemaVersion, 6);
+      expect((await db.select(db.dbEmails).get()).single.subject, 'Old report');
+      expect(
+        (await db.select(db.dbTrustedSenders).get()).single.senderEmail,
+        'trusted@example.com',
+      );
+      final fts = await db
+          .customSelect(
+            "SELECT COUNT(*) AS c FROM emails_fts WHERE emails_fts MATCH 'report'",
+          )
+          .getSingle();
+      expect(fts.read<int>('c'), 1);
 
-    await db.into(db.dbOutboxMessages).insert(
-          DbOutboxMessagesCompanion.insert(
-            id: 'o',
-            accountId: 'a',
-            mode: 'newMail',
-            outgoingMessageId: const Value('<stable@local-mail.local>'),
-            toRecipientsJson: '[]',
-            ccJson: '[]',
-            bccJson: '[]',
-            subject: 'new outbox',
-            plainBody: 'body',
-            attachmentsJson: '[]',
-            status: 'draft',
-            createdAt: 2,
-            updatedAt: 2,
-          ),
-        );
-    expect(
-      (await db.select(db.dbOutboxMessages).getSingle()).outgoingMessageId,
-      '<stable@local-mail.local>',
-    );
+      await db
+          .into(db.dbOutboxMessages)
+          .insert(
+            DbOutboxMessagesCompanion.insert(
+              id: 'o',
+              accountId: 'a',
+              mode: 'newMail',
+              outgoingMessageId: const Value('<stable@local-mail.local>'),
+              toRecipientsJson: '[]',
+              ccJson: '[]',
+              bccJson: '[]',
+              subject: 'new outbox',
+              plainBody: 'body',
+              attachmentsJson: '[]',
+              status: 'draft',
+              createdAt: 2,
+              updatedAt: 2,
+            ),
+          );
+      expect(
+        (await db.select(db.dbOutboxMessages).getSingle()).outgoingMessageId,
+        '<stable@local-mail.local>',
+      );
 
-    await (db.delete(db.dbAccounts)
-          ..where((table) => table.id.equals('a')))
-        .go();
-    expect(await db.select(db.dbOutboxMessages).get(), isEmpty);
-  });
+      await (db.delete(
+        db.dbAccounts,
+      )..where((table) => table.id.equals('a'))).go();
+      expect(await db.select(db.dbOutboxMessages).get(), isEmpty);
+    },
+  );
 
-  test('real v3 database upgrades to v5 without losing outbox rows', () async {
+  test('real v3 database upgrades to v6 without losing outbox rows', () async {
     final dir = Directory.systemTemp.createTempSync('outbox_migration_v3_');
     addTearDown(() => dir.delete(recursive: true));
     final file = File(p.join(dir.path, 'mail.sqlite'));
@@ -238,16 +242,16 @@ void main() {
     addTearDown(db.close);
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 5);
+    expect(version.read<int>('user_version'), 6);
     final outbox = await db.select(db.dbOutboxMessages).getSingle();
     expect(outbox.subject, 'v3 draft');
     expect(outbox.outgoingMessageId, null);
 
     // The migration added the idempotency column; a repository write can fill
     // it for the existing row.
-    await (db.update(db.dbOutboxMessages)
-          ..where((table) => table.id.equals('old-outbox')))
-        .write(
+    await (db.update(
+      db.dbOutboxMessages,
+    )..where((table) => table.id.equals('old-outbox'))).write(
       const DbOutboxMessagesCompanion(
         outgoingMessageId: Value('<backfilled@local-mail.local>'),
       ),
@@ -258,43 +262,81 @@ void main() {
     );
   });
 
-  test('real v4 database upgrades to v5 with indexes and data preserved',
-      () async {
-    final dir = Directory.systemTemp.createTempSync('outbox_migration_v4_');
+  test(
+    'real v4 database upgrades to v6 with indexes and data preserved',
+    () async {
+      final dir = Directory.systemTemp.createTempSync('outbox_migration_v4_');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File(p.join(dir.path, 'mail.sqlite'));
+
+      final db = AppDatabase.forTesting(
+        _fixtureDatabase(
+          file,
+          4,
+          _baseSchema(
+            withTrusted: true,
+            withOutbox: true,
+            outboxHasOutgoingId: true,
+          ),
+        ),
+      );
+      addTearDown(db.close);
+
+      final version = await db.customSelect('PRAGMA user_version').getSingle();
+      expect(version.read<int>('user_version'), 6);
+      expect(db.schemaVersion, 6);
+      final outbox = await db.select(db.dbOutboxMessages).getSingle();
+      expect(outbox.subject, 'v3 draft');
+      expect(outbox.outgoingMessageId, null);
+      expect((await db.select(db.dbEmails).get()).single.subject, 'Old report');
+
+      final indexes = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN "
+            "('idx_emails_folder_sent_uid', 'idx_folders_role_account')",
+          )
+          .get();
+      expect(indexes.map((row) => row.read<String>('name')).toSet(), {
+        'idx_emails_folder_sent_uid',
+        'idx_folders_role_account',
+      });
+    },
+  );
+
+  test('v5 upgrades archive policy and pending copies, then reopens safely', () async {
+    final dir = Directory.systemTemp.createTempSync('outbox_migration_v5_');
     addTearDown(() => dir.delete(recursive: true));
     final file = File(p.join(dir.path, 'mail.sqlite'));
-
     final db = AppDatabase.forTesting(
       _fixtureDatabase(
         file,
-        4,
-        _baseSchema(
-          withTrusted: true,
-          withOutbox: true,
-          outboxHasOutgoingId: true,
-        ),
+        5,
+        "${_baseSchema(withTrusted: true, withOutbox: true, outboxHasOutgoingId: true)}UPDATE db_accounts SET provider_type = 'custom'; UPDATE db_outbox_messages SET status = 'sent';",
       ),
     );
-    addTearDown(db.close);
-
-    final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 5);
-    expect(db.schemaVersion, 5);
-    final outbox = await db.select(db.dbOutboxMessages).getSingle();
-    expect(outbox.subject, 'v3 draft');
-    expect(outbox.outgoingMessageId, null);
-    expect((await db.select(db.dbEmails).get()).single.subject, 'Old report');
-
-    final indexes = await db
-        .customSelect(
-          "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN "
-          "('idx_emails_folder_sent_uid', 'idx_folders_role_account')",
-        )
-        .get();
-    expect(indexes.map((row) => row.read<String>('name')).toSet(), {
-      'idx_emails_folder_sent_uid',
-      'idx_folders_role_account',
-    });
+    expect((await db.select(db.dbAccounts).getSingle()).saveSentCopy, isTrue);
+    expect(
+      (await db.select(db.dbOutboxMessages).getSingle()).sentCopySaved,
+      isFalse,
+    );
+    expect(
+      (await db.select(db.dbEmails).getSingle()).plainBody,
+      'Quarterly report',
+    );
+    await db.close();
+    final reopened = AppDatabase.forTesting(NativeDatabase(file));
+    addTearDown(reopened.close);
+    expect(
+      (await reopened.select(reopened.dbAccounts).getSingle()).saveSentCopy,
+      isTrue,
+    );
+    expect(
+      (await reopened.select(reopened.dbOutboxMessages).getSingle()).status,
+      'sent',
+    );
+    expect(
+      (await reopened.customSelect('PRAGMA foreign_key_check').get()),
+      isEmpty,
+    );
   });
-
 }

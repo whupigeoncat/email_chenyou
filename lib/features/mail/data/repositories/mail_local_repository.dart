@@ -23,15 +23,29 @@ import '../../domain/entities/unified_email.dart';
 /// - Search uses FTS5 trigram for >= 3 characters and an escaped LIKE query
 ///   for 1-2 character CJK/ASCII terms.
 class MailLocalRepository {
-  MailLocalRepository({
-    required this._dataSource,
-    SanitizedLogger? logger,
-  }) : _logger = logger ?? SanitizedLogger.instance;
+  MailLocalRepository({required this._dataSource, SanitizedLogger? logger})
+    : _logger = logger ?? SanitizedLogger.instance;
 
   final MailLocalDataSource _dataSource;
   final SanitizedLogger _logger;
 
   AppDatabase get _database => _dataSource.database;
+  final Map<String, Future<void>> _folderSyncs = {};
+
+  Future<T> runFolderSync<T>(String folderId, Future<T> Function() action) {
+    final previous = _folderSyncs[folderId] ?? Future<void>.value();
+    final operation = previous.catchError((_) {}).then((_) => action());
+    late final Future<void> tail;
+    tail = operation
+        .then<void>((_) {}, onError: (Object _, StackTrace _) {})
+        .whenComplete(() {
+          if (identical(_folderSyncs[folderId], tail)) {
+            _folderSyncs.remove(folderId);
+          }
+        });
+    _folderSyncs[folderId] = tail;
+    return operation;
+  }
 
   // ---------------------------------------------------------------------------
   // Folder cache
@@ -147,8 +161,7 @@ class MailLocalRepository {
     });
   }
 
-  Future<LocalCacheStats> readLocalCacheStats() =>
-      _dataSource.readCacheStats();
+  Future<LocalCacheStats> readLocalCacheStats() => _dataSource.readCacheStats();
 
   Future<int?> getMaxUid(String folderId) => _dataSource.getMaxUid(folderId);
 
@@ -317,13 +330,42 @@ class MailLocalRepository {
         );
       }
 
+      if (!result.uidValidityChanged && result.reconciledUids.isNotEmpty) {
+        final uids = result.reconciledUids.toList();
+        for (var start = 0; start < uids.length; start += 500) {
+          final end = start + 500 < uids.length ? start + 500 : uids.length;
+          final chunk = uids.sublist(start, end);
+          final vanished = chunk.where(
+            (uid) => !result.reconciledFlags.containsKey(uid),
+          );
+          vanishedCount +=
+              await (_database.delete(_database.dbEmails)..where(
+                    (table) =>
+                        table.folderId.equals(folder.id) &
+                        table.uid.isIn(vanished),
+                  ))
+                  .go();
+          await _database.batch((batch) {
+            for (final uid in chunk) {
+              final flags = result.reconciledFlags[uid];
+              if (flags == null) continue;
+              batch.update(
+                _database.dbEmails,
+                DbEmailsCompanion(flagsBitmask: Value(_flagsToMask(flags))),
+                where: (table) =>
+                    table.folderId.equals(folder.id) & table.uid.equals(uid),
+              );
+            }
+          });
+        }
+      }
       await _refreshUnreadCount(folder.id);
     });
 
     _logger.info(
       'MailLocalRepository',
       'Applied sync: folder=${folder.role.storageKey} new=$newCount '
-      'updated=$updatedCount vanished=$vanishedCount',
+          'updated=$updatedCount vanished=$vanishedCount',
     );
   }
 
@@ -619,10 +661,11 @@ class MailLocalRepository {
     List<RemoteAttachmentMeta> attachments, {
     List<DbAttachment>? existingRows,
   }) async {
-    final localRows = existingRows ??
-        await (_database.select(_database.dbAttachments)
-              ..where((table) => table.emailLocalId.equals(emailLocalId)))
-            .get();
+    final localRows =
+        existingRows ??
+        await (_database.select(
+          _database.dbAttachments,
+        )..where((table) => table.emailLocalId.equals(emailLocalId))).get();
     final existingByPart = <String, DbAttachment>{
       for (final row in localRows) row.partId: row,
     };

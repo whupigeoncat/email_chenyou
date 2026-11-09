@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../../core/error/failures.dart';
 import '../../../auth/domain/entities/mail_account.dart';
 import '../../data/repositories/mail_local_repository.dart';
 import '../../data/repositories/mail_remote_repository.dart';
@@ -37,16 +38,19 @@ class DownloadAttachmentUseCase {
       throw StateError('Attachment $partId does not exist locally');
     }
 
+    final email = await _localRepository.getEmail(emailLocalId);
+    if (email == null) {
+      throw StateError('Local email $emailLocalId no longer exists');
+    }
+    if (account.id != email.accountId) {
+      throw const StorageFailure(userMessage: '邮件不属于当前账户，操作已阻止。');
+    }
     final cachedPath = attachment.localCachePath;
     if (cachedPath != null && cachedPath.isNotEmpty) {
       final cachedFile = File(cachedPath);
       if (await cachedFile.exists()) return cachedPath;
     }
 
-    final email = await _localRepository.getEmail(emailLocalId);
-    if (email == null) {
-      throw StateError('Local email $emailLocalId no longer exists');
-    }
     final folder = await _localRepository.getFolderById(email.folderId);
     if (folder == null) {
       throw StateError('Folder ${email.folderId} no longer exists');

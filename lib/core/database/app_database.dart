@@ -22,6 +22,7 @@ class DbAccounts extends Table {
   TextColumn get smtpHost => text()();
   IntColumn get smtpPort => integer()();
   BoolColumn get smtpImplicitTls => boolean()();
+  BoolColumn get saveSentCopy => boolean().withDefault(const Constant(false))();
   BoolColumn get isEnabled => boolean().withDefault(const Constant(true))();
   IntColumn get createdAt => integer()();
 
@@ -73,13 +74,15 @@ class DbEmails extends Table {
   TextColumn get htmlBody => text().nullable()();
   IntColumn get sentAt => integer()();
   IntColumn get flagsBitmask => integer().withDefault(const Constant(0))();
-  BoolColumn get hasAttachments => boolean().withDefault(const Constant(false))();
-  BoolColumn get bodyDownloaded => boolean().withDefault(const Constant(false))();
+  BoolColumn get hasAttachments =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get bodyDownloaded =>
+      boolean().withDefault(const Constant(false))();
 
   @override
   List<Set<Column<Object>>> get uniqueKeys => [
-        {folderId, uid},
-      ];
+    {folderId, uid},
+  ];
 }
 
 @TableIndex(name: 'idx_attachments_email', columns: {#emailLocalId})
@@ -138,6 +141,8 @@ class DbOutboxMessages extends Table {
   TextColumn get lastError => text().nullable()();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
+  BoolColumn get sentCopySaved =>
+      boolean().withDefault(const Constant(false))();
   IntColumn get sentAt => integer().nullable()();
 
   @override
@@ -160,43 +165,49 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (Migrator m) async {
-          await m.createAll();
-          await _createFts5Schema();
-        },
-        onUpgrade: (Migrator m, int from, int to) async {
-          if (from < 2) {
-            await m.createTable(dbTrustedSenders);
-          }
-          if (from < 3) {
-            await m.createTable(dbOutboxMessages);
-          } else if (from < 4) {
-            await m.addColumn(
-              dbOutboxMessages,
-              dbOutboxMessages.outgoingMessageId,
-            );
-          }
-          if (from < 5) {
-            await customStatement(
-              'CREATE INDEX IF NOT EXISTS idx_folders_role_account '
-              'ON db_folders(role, account_id)',
-            );
-            await customStatement(
-              'CREATE INDEX IF NOT EXISTS idx_emails_folder_sent_uid '
-              'ON db_emails(folder_id, sent_at, uid)',
-            );
-          }
-        },
-        beforeOpen: (details) async {
-          await customStatement('PRAGMA foreign_keys = ON');
-          await customStatement('PRAGMA journal_mode = WAL');
-          await customStatement('PRAGMA synchronous = NORMAL');
-        },
-      );
+    onCreate: (Migrator m) async {
+      await m.createAll();
+      await _createFts5Schema();
+    },
+    onUpgrade: (Migrator m, int from, int to) async {
+      if (from < 2) {
+        await m.createTable(dbTrustedSenders);
+      }
+      if (from < 3) {
+        await m.createTable(dbOutboxMessages);
+      } else if (from < 4) {
+        await m.addColumn(dbOutboxMessages, dbOutboxMessages.outgoingMessageId);
+      }
+      if (from < 6) {
+        await m.addColumn(dbAccounts, dbAccounts.saveSentCopy);
+        if (from >= 3) {
+          await m.addColumn(dbOutboxMessages, dbOutboxMessages.sentCopySaved);
+        }
+        await customStatement(
+          "UPDATE db_accounts SET save_sent_copy = 1 WHERE provider_type = 'custom'",
+        );
+      }
+      if (from < 5) {
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_folders_role_account '
+          'ON db_folders(role, account_id)',
+        );
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_emails_folder_sent_uid '
+          'ON db_emails(folder_id, sent_at, uid)',
+        );
+      }
+    },
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+      await customStatement('PRAGMA journal_mode = WAL');
+      await customStatement('PRAGMA synchronous = NORMAL');
+    },
+  );
 
   Future<void> _createFts5Schema() async {
     // Use SQLite FTS5 trigram tokenizer for full-text substring matching across

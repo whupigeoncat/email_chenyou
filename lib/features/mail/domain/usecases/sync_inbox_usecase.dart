@@ -2,6 +2,7 @@ import '../../../auth/domain/entities/mail_account.dart';
 import '../../data/repositories/mail_local_repository.dart';
 import '../../data/repositories/mail_remote_repository.dart';
 import '../entities/mail_folder.dart';
+import 'poll_folder_usecase.dart';
 
 /// Lists mailboxes and synchronizes the INBOX folder on the persistent IDLE
 /// socket. Folder discovery uses the same socket; no extra connection is opened.
@@ -34,18 +35,9 @@ class SyncInboxUseCase {
     );
     if (inbox == null) return null;
 
-    final maxUid = await _localRepository.getMaxUid(inbox.id);
-    final result = await _remoteRepository.syncFolder(
-      account: account,
-      folder: inbox,
-      localMaxUid: maxUid,
-    );
-    await _localRepository.applyFolderSync(
-      account: account,
-      folder: inbox,
-      result: result,
-    );
-
-    return await _localRepository.getFolderById(inbox.id) ?? inbox;
+    return PollFolderUseCase(
+      localRepository: _localRepository,
+      remoteRepository: _remoteRepository,
+    )(account: account, folder: inbox);
   }
 }

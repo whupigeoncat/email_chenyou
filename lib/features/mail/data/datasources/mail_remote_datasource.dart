@@ -1,3 +1,4 @@
+import '../../../../core/error/failures.dart';
 import '../../../../core/network/connection_pool.dart';
 import '../../../../core/network/imap_session.dart';
 import '../../../auth/domain/entities/mail_account.dart';
@@ -29,11 +30,25 @@ class MailRemoteDataSource {
   Future<T> withFolder<T>({
     required MailAccount account,
     required MailFolder folder,
+    bool checkUidValidity = false,
     required Future<T> Function(ImapSession session, RemoteMailboxStatus status)
     action,
   }) {
+    if (account.id != folder.accountId) {
+      return Future.error(
+        const StorageFailure(userMessage: '邮件文件夹不属于当前账户，操作已阻止。'),
+      );
+    }
     Future<T> run(ImapSession session) async {
       final status = await session.selectFolderWithStatus(folder.remoteName);
+      if (checkUidValidity &&
+          folder.uidValidity != null &&
+          folder.uidValidity != status.uidValidity) {
+        throw const ImapProtocolFailure(
+          reason: ImapFailureReason.uidValidityChanged,
+          userMessage: '服务器已重建邮件索引，请刷新邮箱后重试，已阻止操作旧邮件。',
+        );
+      }
       return action(session, status);
     }
 

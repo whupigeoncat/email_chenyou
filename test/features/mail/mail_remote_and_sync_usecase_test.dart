@@ -219,6 +219,7 @@ void main() {
         messagesExists: 4,
       );
       factory.headers['INBOX'] = <RemoteFetchedMessage>[];
+      factory.flagFetchResponse = {10: [], 11: [], 12: []};
       factory.uidFetchResponse = <RemoteFetchedMessage>[
         _header(12, subject: 'Echoed last message', flags: <String>[r'\Seen']),
         _header(13, subject: 'Brand new message'),

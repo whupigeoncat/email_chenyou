@@ -21,6 +21,7 @@ class UnifiedInboxViewState {
     this.folder,
     this.unreadOnly = false,
     this.isSyncing = false,
+    this.isLoadingMore = false,
     this.errorMessage,
     this.lastSyncedAt,
     this.pageLimit = 200,
@@ -34,6 +35,7 @@ class UnifiedInboxViewState {
 
   final bool unreadOnly;
   final bool isSyncing;
+  final bool isLoadingMore;
   final String? errorMessage;
   final DateTime? lastSyncedAt;
 
@@ -49,6 +51,7 @@ class UnifiedInboxViewState {
     Object? folder = _unset,
     bool? unreadOnly,
     bool? isSyncing,
+    bool? isLoadingMore,
     Object? errorMessage = _unset,
     Object? lastSyncedAt = _unset,
     int? pageLimit,
@@ -60,6 +63,7 @@ class UnifiedInboxViewState {
       folder: identical(folder, _unset) ? this.folder : folder as MailFolder?,
       unreadOnly: unreadOnly ?? this.unreadOnly,
       isSyncing: isSyncing ?? this.isSyncing,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       errorMessage: identical(errorMessage, _unset)
           ? this.errorMessage
           : errorMessage as String?,
@@ -97,20 +101,62 @@ class UnifiedInboxView extends _$UnifiedInboxView {
     state = state.copyWith(unreadOnly: !state.unreadOnly);
   }
 
-  /// Expands the window by 200 rows. Coalesces rapid scroll notifications so a
-  /// single gesture cannot accidentally request the entire mailbox.
-  void loadMore() {
+  /// Load history from the server as well as expanding the local list.
+  Future<void> loadMore() async {
+    if (state.isLoadingMore || state.isSyncing) return;
     final now = DateTime.now();
     if (_lastLoadMoreAt != null &&
         now.difference(_lastLoadMoreAt!) < const Duration(milliseconds: 300)) {
       return;
     }
     _lastLoadMoreAt = now;
-    state = state.copyWith(pageLimit: state.pageLimit + 200);
+    final folder = state.folder;
+    final accountId = state.accountId;
+    state = state.copyWith(
+      pageLimit: state.pageLimit + 200,
+      isLoadingMore: true,
+      errorMessage: null,
+    );
+    try {
+      final auth = ref.read(authRepositoryProvider);
+      final local = ref.read(mailLocalRepositoryProvider);
+      final accounts = (await auth.getAccounts()).where(
+        (account) =>
+            account.isEnabled &&
+            (folder != null
+                ? account.id == folder.accountId
+                : accountId == null || account.id == accountId),
+      );
+      for (final account in accounts) {
+        final target =
+            folder ?? await local.getFolderByRole(account.id, FolderRole.inbox);
+        if (target == null) {
+          await _syncAccount(account);
+          continue;
+        }
+        await ref.read(pollFolderUseCaseProvider)(
+          account: account,
+          folder: target,
+          loadOlder: true,
+        );
+      }
+    } catch (error) {
+      if (ref.mounted &&
+          state.folder?.id == folder?.id &&
+          state.accountId == accountId) {
+        state = state.copyWith(
+          errorMessage: error is AppFailure
+              ? error.userMessage
+              : '加载历史邮件失败：$error',
+        );
+      }
+    } finally {
+      if (ref.mounted) state = state.copyWith(isLoadingMore: false);
+    }
   }
 
   Future<void> syncCurrent() async {
-    if (state.isSyncing) return;
+    if (state.isSyncing || state.isLoadingMore) return;
     state = state.copyWith(isSyncing: true, errorMessage: null);
 
     try {
@@ -121,10 +167,9 @@ class UnifiedInboxView extends _$UnifiedInboxView {
         if (account == null || !account.isEnabled) {
           throw StateError('账户不存在或已停用');
         }
-        await ref.read(pollFolderUseCaseProvider).call(
-              account: account,
-              folder: folder,
-            );
+        await ref
+            .read(pollFolderUseCaseProvider)
+            .call(account: account, folder: folder);
       } else {
         final accounts = (await auth.getAccounts())
             .where((account) => account.isEnabled)
@@ -147,10 +192,7 @@ class UnifiedInboxView extends _$UnifiedInboxView {
       );
     } catch (error) {
       if (!ref.mounted) return;
-      state = state.copyWith(
-        isSyncing: false,
-        errorMessage: '同步失败：$error',
-      );
+      state = state.copyWith(isSyncing: false, errorMessage: '同步失败：$error');
     }
   }
 
@@ -181,7 +223,9 @@ class UnifiedInboxView extends _$UnifiedInboxView {
           .read(authRepositoryProvider)
           .getAccount(email.accountId);
       if (account == null) throw StateError('账户不存在');
-      await ref.read(updateEmailFlagsUseCaseProvider).call(
+      await ref
+          .read(updateEmailFlagsUseCaseProvider)
+          .call(
             account: account,
             emailLocalId: localId,
             isRead: isRead,

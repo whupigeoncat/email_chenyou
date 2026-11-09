@@ -46,6 +46,8 @@ class MailRemoteRepository {
     required MailAccount account,
     required MailFolder folder,
     required int? localMaxUid,
+    Set<int> localUids = const {},
+    int? olderThanUid,
   }) {
     return _dataSource.withFolder(
       account: account,
@@ -86,17 +88,57 @@ class MailRemoteRepository {
           merged.putIfAbsent(message.uid, () => message);
         }
 
+        if (!uidValidityChanged && olderThanUid != null) {
+          final older = await session.fetchOlderMessageHeaders(
+            beforeUid: olderThanUid,
+          );
+          for (final message in older) {
+            if (message.uid < olderThanUid) merged[message.uid] = message;
+          }
+        }
+        final flags = <int, List<String>>{};
+        final checked = isFullSnapshot ? <int>[] : localUids.toList();
+        for (var start = 0; start < checked.length; start += 500) {
+          final end = start + 500 < checked.length
+              ? start + 500
+              : checked.length;
+          flags.addAll(
+            await session.uidFetchFlags(checked.sublist(start, end)),
+          );
+        }
+
         final messages = merged.values.toList(growable: false)
           ..sort((a, b) => a.uid.compareTo(b.uid));
 
         return MailFolderSyncResult(
           status: status,
+          reconciledUids: checked.toSet(),
+          reconciledFlags: flags,
           messages: messages,
           uidValidityChanged: uidValidityChanged,
           isFullSnapshot: isFullSnapshot,
           recentWindowMinUid: recentMinUid,
           recentWindowMaxUid: recentMaxUid,
         );
+      },
+    );
+  }
+
+  Future<bool> saveSentCopy({
+    required MailAccount account,
+    required MailFolder folder,
+    required String messageId,
+    required Future<String> Function() buildMimeText,
+    DateTime? sentAt,
+  }) {
+    return _dataSource.withFolder(
+      account: account,
+      folder: folder,
+      action: (session, _) async {
+        if (await session.containsMessageId(messageId)) return true;
+        if (!account.saveSentCopy) return false;
+        await session.appendSentMessage(await buildMimeText(), sentAt: sentAt);
+        return true;
       },
     );
   }
@@ -109,6 +151,7 @@ class MailRemoteRepository {
     return _dataSource.withFolder(
       account: account,
       folder: folder,
+      checkUidValidity: true,
       action: (session, _) => session.uidFetchFullMessage(uid),
     );
   }
@@ -122,6 +165,7 @@ class MailRemoteRepository {
     return _dataSource.withFolder(
       account: account,
       folder: folder,
+      checkUidValidity: true,
       action: (session, _) =>
           session.uidFetchAttachmentPart(uid: uid, partId: partId),
     );
@@ -137,6 +181,7 @@ class MailRemoteRepository {
     return _dataSource.withFolder(
       account: account,
       folder: folder,
+      checkUidValidity: true,
       action: (session, _) async {
         if (add.isNotEmpty) {
           await session.uidStoreFlags(uid: uid, flags: add, add: true);

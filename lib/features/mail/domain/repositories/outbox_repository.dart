@@ -15,10 +15,7 @@ abstract interface class OutboxRepository {
 
   Future<OutboxMessage?> getById(String id);
 
-  Future<OutboxMessage> saveDraft({
-    required ComposeDraft draft,
-    String? id,
-  });
+  Future<OutboxMessage> saveDraft({required ComposeDraft draft, String? id});
 
   Future<void> enqueue(String id);
 
@@ -28,6 +25,8 @@ abstract interface class OutboxRepository {
   Future<bool> markSending(String id);
 
   Future<void> markSent(String id);
+
+  Future<void> recordSentCopy(String id, {required bool saved, String? error});
 
   Future<void> markQueued(String id);
 

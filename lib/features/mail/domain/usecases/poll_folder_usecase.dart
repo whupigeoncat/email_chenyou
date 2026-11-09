@@ -17,18 +17,26 @@ class PollFolderUseCase {
   Future<MailFolder> call({
     required MailAccount account,
     required MailFolder folder,
+    bool loadOlder = false,
   }) async {
-    final maxUid = await _localRepository.getMaxUid(folder.id);
-    final result = await _remoteRepository.syncFolder(
-      account: account,
-      folder: folder,
-      localMaxUid: maxUid,
-    );
-    await _localRepository.applyFolderSync(
-      account: account,
-      folder: folder,
-      result: result,
-    );
-    return await _localRepository.getFolderById(folder.id) ?? folder;
+    return _localRepository.runFolderSync(folder.id, () async {
+      final current = await _localRepository.getFolderById(folder.id) ?? folder;
+      final uids = await _localRepository.getUids(folder.id);
+      final maxUid = uids.isEmpty ? null : uids.reduce((a, b) => a > b ? a : b);
+      final minUid = uids.isEmpty ? null : uids.reduce((a, b) => a < b ? a : b);
+      final result = await _remoteRepository.syncFolder(
+        account: account,
+        folder: current,
+        localMaxUid: maxUid,
+        localUids: uids,
+        olderThanUid: loadOlder ? minUid : null,
+      );
+      await _localRepository.applyFolderSync(
+        account: account,
+        folder: current,
+        result: result,
+      );
+      return await _localRepository.getFolderById(folder.id) ?? current;
+    });
   }
 }

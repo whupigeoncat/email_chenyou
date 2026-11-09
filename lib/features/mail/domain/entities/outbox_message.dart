@@ -62,11 +62,11 @@ class OutgoingAttachment {
   final int sizeBytes;
 
   Map<String, dynamic> toJson() => {
-        'fileName': fileName,
-        'mimeType': mimeType,
-        'localPath': localPath,
-        'sizeBytes': sizeBytes,
-      };
+    'fileName': fileName,
+    'mimeType': mimeType,
+    'localPath': localPath,
+    'sizeBytes': sizeBytes,
+  };
 
   factory OutgoingAttachment.fromJson(Map<String, dynamic> json) {
     return OutgoingAttachment(
@@ -87,8 +87,7 @@ class OutgoingAttachment {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(fileName, mimeType, localPath, sizeBytes);
+  int get hashCode => Object.hash(fileName, mimeType, localPath, sizeBytes);
 }
 
 @immutable
@@ -125,10 +124,10 @@ class OutgoingMailEnvelope {
   final List<OutgoingAttachment> attachments;
 
   List<EmailAddressEntry> get allRecipients => <EmailAddressEntry>[
-        ...to,
-        ...cc,
-        ...bcc,
-      ];
+    ...to,
+    ...cc,
+    ...bcc,
+  ];
 
   static OutgoingMailEnvelope fromComposeDraft(
     ComposeDraft draft,
@@ -245,6 +244,7 @@ class OutboxMessage {
     this.nextRetryAt,
     this.lastError,
     this.sentAt,
+    this.sentCopySaved = false,
   });
 
   final String id;
@@ -271,6 +271,7 @@ class OutboxMessage {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? sentAt;
+  final bool sentCopySaved;
 
   bool get isDraft => status == OutboxStatus.draft;
   bool get isTerminal =>
@@ -319,6 +320,7 @@ class OutboxMessage {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? sentAt,
+    bool? sentCopySaved,
   }) {
     return OutboxMessage(
       id: id ?? this.id,
@@ -343,6 +345,7 @@ class OutboxMessage {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       sentAt: sentAt ?? this.sentAt,
+      sentCopySaved: sentCopySaved ?? this.sentCopySaved,
     );
   }
 }

@@ -85,6 +85,10 @@ class _SearchEmailsPageState extends ConsumerState<SearchEmailsPage> {
               ),
             ),
           ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Text('仅搜索本地缓存；正文需下载后才能检索。草稿与发件队列仅保存在当前设备。'),
+          ),
           Expanded(child: _buildResults(context, state, notifier)),
         ],
       ),

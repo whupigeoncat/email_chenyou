@@ -18,11 +18,11 @@ class OutboxRepositoryImpl implements OutboxRepository {
     Uuid? uuid,
     DateTime Function()? clock,
     SanitizedLogger? logger,
-  })  : _dataSource = dataSource,
-        _attachmentStore = attachmentStore,
-        _uuid = uuid ?? const Uuid(),
-        _clock = clock ?? DateTime.now,
-        _logger = logger ?? SanitizedLogger.instance;
+  }) : _dataSource = dataSource,
+       _attachmentStore = attachmentStore,
+       _uuid = uuid ?? const Uuid(),
+       _clock = clock ?? DateTime.now,
+       _logger = logger ?? SanitizedLogger.instance;
 
   final OutboxLocalDataSource _dataSource;
   final AttachmentStore? _attachmentStore;
@@ -48,8 +48,7 @@ class OutboxRepositoryImpl implements OutboxRepository {
 
   @override
   Stream<OutboxCounts> watchCounts({String? accountId}) {
-    return watchMessages(accountId: accountId)
-        .map(OutboxCounts.fromMessages);
+    return watchMessages(accountId: accountId).map(OutboxCounts.fromMessages);
   }
 
   @override
@@ -87,8 +86,7 @@ class OutboxRepositoryImpl implements OutboxRepository {
           userMessage: switch (status) {
             OutboxStatus.sent => '该邮件已发送，不能再次修改或重复发送。',
             OutboxStatus.sending => '该邮件正在发送中，请等待发送结果。',
-            OutboxStatus.uncertain =>
-              '该邮件投递状态待确认，请先到发件箱确认后再操作。',
+            OutboxStatus.uncertain => '该邮件投递状态待确认，请先到发件箱确认后再操作。',
             _ => '当前状态不允许修改该邮件。',
           },
         );
@@ -144,8 +142,9 @@ class OutboxRepositoryImpl implements OutboxRepository {
           updatedAt: Value(now),
         ),
       );
-      final oldAttachments =
-          OutboxCodec.decodeAttachments(existing.attachmentsJson);
+      final oldAttachments = OutboxCodec.decodeAttachments(
+        existing.attachmentsJson,
+      );
       final keepPaths = draft.attachments.map((item) => item.localPath).toSet();
       await _attachmentStore?.cleanup(
         oldAttachments.where((item) => !keepPaths.contains(item.localPath)),
@@ -213,9 +212,7 @@ class OutboxRepositoryImpl implements OutboxRepository {
     if (row.outgoingMessageId == null) {
       await _dataSource.update(
         id,
-        DbOutboxMessagesCompanion(
-          outgoingMessageId: Value(_newMessageId()),
-        ),
+        DbOutboxMessagesCompanion(outgoingMessageId: Value(_newMessageId())),
       );
     }
     return true;
@@ -248,8 +245,26 @@ class OutboxRepositoryImpl implements OutboxRepository {
         sentAt: Value(now),
       ),
     );
+  }
+
+  @override
+  Future<void> recordSentCopy(
+    String id, {
+    required bool saved,
+    String? error,
+  }) async {
     final row = await _dataSource.getById(id);
-    if (row != null) {
+    if (row == null || row.status != OutboxStatus.sent.storageKey) return;
+    await _dataSource.update(
+      id,
+      DbOutboxMessagesCompanion(
+        sentCopySaved: Value(saved),
+        lastError: Value(
+          error == null ? null : SanitizedLogger.sanitize(error),
+        ),
+      ),
+    );
+    if (saved) {
       await _attachmentStore?.cleanup(
         OutboxCodec.decodeAttachments(row.attachmentsJson),
       );
@@ -277,7 +292,6 @@ class OutboxRepositoryImpl implements OutboxRepository {
     );
   }
 
-
   @override
   Future<void> markUncertain(String id, {required String error}) {
     return _dataSource.update(
@@ -296,22 +310,16 @@ class OutboxRepositoryImpl implements OutboxRepository {
   Future<void> delete(String id) async {
     final existing = await _dataSource.getById(id);
     if (existing != null &&
-        OutboxStatus.fromStorageKey(existing.status) ==
-            OutboxStatus.sending) {
-      throw const StorageFailure(
-        userMessage: '邮件正在发送中，暂不可删除，请等待发送完成。',
-      );
+        OutboxStatus.fromStorageKey(existing.status) == OutboxStatus.sending) {
+      throw const StorageFailure(userMessage: '邮件正在发送中，暂不可删除，请等待发送完成。');
     }
 
     final deleted = await _dataSource.deleteNonSending(id);
     if (deleted == 0) {
       final latest = await _dataSource.getById(id);
       if (latest != null &&
-          OutboxStatus.fromStorageKey(latest.status) ==
-              OutboxStatus.sending) {
-        throw const StorageFailure(
-          userMessage: '邮件正在发送中，暂不可删除，请等待发送完成。',
-        );
+          OutboxStatus.fromStorageKey(latest.status) == OutboxStatus.sending) {
+        throw const StorageFailure(userMessage: '邮件正在发送中，暂不可删除，请等待发送完成。');
       }
       return;
     }
@@ -361,13 +369,17 @@ class OutboxRepositoryImpl implements OutboxRepository {
       retryable: row.retryable,
       nextRetryAt: row.nextRetryAt == null
           ? null
-          : DateTime.fromMillisecondsSinceEpoch(
-              row.nextRetryAt!,
-              isUtc: true,
-            ),
+          : DateTime.fromMillisecondsSinceEpoch(row.nextRetryAt!, isUtc: true),
       lastError: row.lastError,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(row.createdAt, isUtc: true),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(row.updatedAt, isUtc: true),
+      createdAt: DateTime.fromMillisecondsSinceEpoch(
+        row.createdAt,
+        isUtc: true,
+      ),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(
+        row.updatedAt,
+        isUtc: true,
+      ),
+      sentCopySaved: row.sentCopySaved,
       sentAt: row.sentAt == null
           ? null
           : DateTime.fromMillisecondsSinceEpoch(row.sentAt!, isUtc: true),

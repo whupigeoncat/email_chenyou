@@ -15,6 +15,8 @@ import '../../data/repositories/outbox_repository_impl.dart';
 import '../../data/repositories/trusted_senders_repository_impl.dart';
 import '../../data/services/account_sync_bootstrap.dart';
 import '../../data/services/outbox_queue_service.dart';
+import '../../data/services/sent_copy_service.dart';
+import '../../../../core/logging/sanitized_logger.dart';
 import '../../data/services/inbox_sync_coordinator.dart';
 import '../../domain/entities/local_cache_stats.dart';
 import '../../domain/entities/mail_folder.dart';
@@ -120,9 +122,7 @@ Stream<List<MailFolder>> accountFolders(Ref ref, String accountId) {
 
 @Riverpod(keepAlive: true)
 TrustedSendersRepository trustedSendersRepository(Ref ref) {
-  return TrustedSendersRepositoryImpl(
-    database: ref.watch(appDatabaseProvider),
-  );
+  return TrustedSendersRepositoryImpl(database: ref.watch(appDatabaseProvider));
 }
 
 @Riverpod(keepAlive: true)
@@ -130,9 +130,9 @@ Stream<Set<TrustedSender>> trustedSenders(Ref ref) {
   return ref.watch(trustedSendersRepositoryProvider).watchTrustedSenders();
 }
 
-
 @Riverpod(keepAlive: true)
-AttachmentPicker attachmentPicker(Ref ref) => const FilePickerAttachmentPicker();
+AttachmentPicker attachmentPicker(Ref ref) =>
+    const FilePickerAttachmentPicker();
 
 @Riverpod(keepAlive: true)
 AttachmentStore attachmentStore(Ref ref) => AttachmentStore();
@@ -191,21 +191,31 @@ OutboxQueueService outboxQueue(Ref ref) {
     authRepository: ref.watch(authRepositoryProvider),
     postSendHook: (message, account) async {
       if (message.mode.isReply && message.originEmailLocalId != null) {
-        await ref.read(updateEmailFlagsUseCaseProvider).call(
-              account: account,
+        try {
+          final original = await ref
+              .read(mailLocalRepositoryProvider)
+              .getEmail(message.originEmailLocalId!);
+          final owner = original == null
+              ? null
+              : await ref
+                    .read(authRepositoryProvider)
+                    .getAccount(original.accountId);
+          if (owner != null && owner.isEnabled) {
+            await ref.read(updateEmailFlagsUseCaseProvider)(
+              account: owner,
               emailLocalId: message.originEmailLocalId!,
               isAnswered: true,
             );
+          }
+        } catch (error) {
+          SanitizedLogger.instance.warn(
+            'OutboxQueue',
+            'Failed to mark original as answered',
+            error,
+          );
+        }
       }
-      final sentFolder = await ref
-          .read(mailLocalRepositoryProvider)
-          .getFolderByRole(account.id, FolderRole.sent);
-      if (sentFolder != null) {
-        await ref.read(pollFolderUseCaseProvider).call(
-              account: account,
-              folder: sentFolder,
-            );
-      }
+      await ref.read(sentCopyServiceProvider).save(message.id);
     },
   );
   ref.onDispose(() {
@@ -279,3 +289,11 @@ AccountSyncBootstrap accountSyncBootstrap(Ref ref) {
   });
   return bootstrap;
 }
+
+@Riverpod(keepAlive: true)
+SentCopyService sentCopyService(Ref ref) => SentCopyService(
+  outbox: ref.watch(outboxRepositoryProvider),
+  auth: ref.watch(authRepositoryProvider),
+  local: ref.watch(mailLocalRepositoryProvider),
+  remote: ref.watch(mailRemoteRepositoryProvider),
+);

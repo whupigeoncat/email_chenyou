@@ -43,7 +43,8 @@ class AuthRepositoryImpl implements AuthRepository {
   final Uuid _uuid;
   final DateTime Function() _clock;
   final SanitizedLogger _logger;
-  final Future<void> Function(Iterable<String> paths)? _cleanupOutboxAttachments;
+  final Future<void> Function(Iterable<String> paths)?
+  _cleanupOutboxAttachments;
 
   @override
   Stream<List<MailAccount>> watchAccounts() {
@@ -104,6 +105,7 @@ class AuthRepositoryImpl implements AuthRepository {
               smtpPort: account.smtpPort,
               smtpImplicitTls: account.smtpImplicitTls,
               isEnabled: Value(account.isEnabled),
+              saveSentCopy: Value(account.saveSentCopy),
               createdAt: account.createdAt.millisecondsSinceEpoch,
             ),
           );
@@ -147,6 +149,7 @@ class AuthRepositoryImpl implements AuthRepository {
             smtpPort: Value(account.smtpPort),
             smtpImplicitTls: Value(account.smtpImplicitTls),
             isEnabled: Value(account.isEnabled),
+            saveSentCopy: Value(account.saveSentCopy),
           ),
         );
 
@@ -186,9 +189,9 @@ class AuthRepositoryImpl implements AuthRepository {
     // rows. The files themselves are removed only after the DB delete succeeds.
     final outboxAttachmentPaths = <String>[];
     try {
-      final rows = await (_database.select(_database.dbOutboxMessages)
-            ..where((table) => table.accountId.equals(accountId)))
-          .get();
+      final rows = await (_database.select(
+        _database.dbOutboxMessages,
+      )..where((table) => table.accountId.equals(accountId))).get();
       for (final row in rows) {
         try {
           final decoded = jsonDecode(row.attachmentsJson);
@@ -365,6 +368,7 @@ class AuthRepositoryImpl implements AuthRepository {
       smtpPort: row.smtpPort,
       smtpImplicitTls: row.smtpImplicitTls,
       isEnabled: row.isEnabled,
+      saveSentCopy: row.saveSentCopy,
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         row.createdAt,
         isUtc: true,

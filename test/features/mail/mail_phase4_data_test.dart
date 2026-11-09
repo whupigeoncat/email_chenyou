@@ -12,7 +12,9 @@ import 'package:local_mail_client/features/mail/domain/entities/mail_sync_result
 import 'package:local_mail_client/features/mail/domain/repositories/trusted_senders_repository.dart';
 
 Future<void> _insertAccount(AppDatabase db) {
-  return db.into(db.dbAccounts).insert(
+  return db
+      .into(db.dbAccounts)
+      .insert(
         DbAccountsCompanion.insert(
           id: 'a',
           email: 'a@example.com',
@@ -32,7 +34,9 @@ Future<void> _insertAccount(AppDatabase db) {
 }
 
 Future<void> _insertFolder(AppDatabase db) {
-  return db.into(db.dbFolders).insert(
+  return db
+      .into(db.dbFolders)
+      .insert(
         DbFoldersCompanion.insert(
           id: 'f',
           accountId: 'a',
@@ -44,7 +48,9 @@ Future<void> _insertFolder(AppDatabase db) {
 }
 
 Future<int> _insertEmail(AppDatabase db, {int flags = 0}) {
-  return db.into(db.dbEmails).insert(
+  return db
+      .into(db.dbEmails)
+      .insert(
         DbEmailsCompanion.insert(
           accountId: 'a',
           folderId: 'f',
@@ -64,11 +70,13 @@ Future<int> _insertEmail(AppDatabase db, {int flags = 0}) {
 }
 
 void main() {
-  test('real v1 database upgrades to current schema, keeps rows and FTS search', () async {
-    final db = AppDatabase.forTesting(
-      NativeDatabase.memory(
-        setup: (database) {
-          database.execute('''
+  test(
+    'real v1 database upgrades to current schema, keeps rows and FTS search',
+    () async {
+      final db = AppDatabase.forTesting(
+        NativeDatabase.memory(
+          setup: (database) {
+            database.execute('''
             CREATE TABLE db_accounts (
               id TEXT NOT NULL PRIMARY KEY,
               email TEXT NOT NULL,
@@ -155,7 +163,7 @@ void main() {
                 COALESCE(new.plain_body, new.snippet, ''));
             END;
           ''');
-          database.execute('''
+            database.execute('''
             INSERT INTO db_accounts VALUES
               ('a', 'a@example.com', 'A', 'gmail', 'password', 1,
                'imap.example.com', 993, 1, 'smtp.example.com', 465, 1, 1, 1);
@@ -168,58 +176,72 @@ void main() {
             INSERT INTO db_attachments VALUES
               ('att-old', 1, '2', NULL, 'old.pdf', 'application/pdf', 10, NULL, 0);
           ''');
-          database.execute('PRAGMA user_version = 1');
-        },
-      ),
-    );
-    addTearDown(db.close);
+            database.execute('PRAGMA user_version = 1');
+          },
+        ),
+      );
+      addTearDown(db.close);
 
-    final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 5);
-    expect(db.schemaVersion, 5);
-    expect((await db.select(db.dbAccounts).get()).single.email, 'a@example.com');
-    expect((await db.select(db.dbFolders).get()).single.role, 'inbox');
-    expect((await db.select(db.dbEmails).get()).single.subject, 'Old report');
-    expect((await db.select(db.dbAttachments).get()).single.filename, 'old.pdf');
-    await db.into(db.dbTrustedSenders).insert(
-          DbTrustedSendersCompanion.insert(
-            senderEmail: 'trusted@example.com',
-            createdAt: 1700000001,
-          ),
-        );
-    expect(await db.select(db.dbTrustedSenders).get(), hasLength(1));
-    await db.into(db.dbOutboxMessages).insert(
-          DbOutboxMessagesCompanion.insert(
-            id: 'outbox-old-db',
-            accountId: 'a',
-            mode: 'newMail',
-            toRecipientsJson: '[]',
-            ccJson: '[]',
-            bccJson: '[]',
-            subject: 'Migrated draft',
-            plainBody: 'hello',
-            attachmentsJson: '[]',
-            status: 'draft',
-            createdAt: 1700000002,
-            updatedAt: 1700000002,
-          ),
-        );
-    expect(
-      (await db.select(db.dbOutboxMessages).getSingle()).subject,
-      'Migrated draft',
-    );
+      final version = await db.customSelect('PRAGMA user_version').getSingle();
+      expect(version.read<int>('user_version'), 6);
+      expect(db.schemaVersion, 6);
+      expect(
+        (await db.select(db.dbAccounts).get()).single.email,
+        'a@example.com',
+      );
+      expect((await db.select(db.dbFolders).get()).single.role, 'inbox');
+      expect((await db.select(db.dbEmails).get()).single.subject, 'Old report');
+      expect(
+        (await db.select(db.dbAttachments).get()).single.filename,
+        'old.pdf',
+      );
+      await db
+          .into(db.dbTrustedSenders)
+          .insert(
+            DbTrustedSendersCompanion.insert(
+              senderEmail: 'trusted@example.com',
+              createdAt: 1700000001,
+            ),
+          );
+      expect(await db.select(db.dbTrustedSenders).get(), hasLength(1));
+      await db
+          .into(db.dbOutboxMessages)
+          .insert(
+            DbOutboxMessagesCompanion.insert(
+              id: 'outbox-old-db',
+              accountId: 'a',
+              mode: 'newMail',
+              toRecipientsJson: '[]',
+              ccJson: '[]',
+              bccJson: '[]',
+              subject: 'Migrated draft',
+              plainBody: 'hello',
+              attachmentsJson: '[]',
+              status: 'draft',
+              createdAt: 1700000002,
+              updatedAt: 1700000002,
+            ),
+          );
+      expect(
+        (await db.select(db.dbOutboxMessages).getSingle()).subject,
+        'Migrated draft',
+      );
 
-    final fts = await db
-        .customSelect("SELECT COUNT(*) AS c FROM emails_fts WHERE emails_fts MATCH 'report'")
-        .getSingle();
-    expect(fts.read<int>('c'), 1);
-  });
+      final fts = await db
+          .customSelect(
+            "SELECT COUNT(*) AS c FROM emails_fts WHERE emails_fts MATCH 'report'",
+          )
+          .getSingle();
+      expect(fts.read<int>('c'), 1);
+    },
+  );
 
   test('trusted sender repository normalizes and persists addresses', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
-    final TrustedSendersRepository repository =
-        TrustedSendersRepositoryImpl(database: db);
+    final TrustedSendersRepository repository = TrustedSendersRepositoryImpl(
+      database: db,
+    );
 
     await repository.trustSender('  Alice@Example.com ');
     expect(await repository.isTrusted('alice@example.com'), isTrue);
@@ -231,91 +253,100 @@ void main() {
     expect(await repository.isTrusted('alice@example.com'), isFalse);
   });
 
-  test('unified unread filter, folder stream and email attachment refresh',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    await _insertAccount(db);
-    await _insertFolder(db);
-    final emailLocalId = await _insertEmail(db);
-    await db.into(db.dbEmails).insert(
-          DbEmailsCompanion.insert(
-            accountId: 'a',
-            folderId: 'f',
-            uid: 2,
-            subject: 'Read message',
-            fromName: 'Sender',
-            fromAddress: 'sender@example.com',
-            toRecipientsJson: '[]',
-            ccJson: '[]',
-            snippet: 'snippet',
-            sentAt: 1,
-            flagsBitmask: const Value(1),
-            bodyDownloaded: const Value(true),
-          ),
-        );
+  test(
+    'unified unread filter, folder stream and email attachment refresh',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _insertAccount(db);
+      await _insertFolder(db);
+      final emailLocalId = await _insertEmail(db);
+      await db
+          .into(db.dbEmails)
+          .insert(
+            DbEmailsCompanion.insert(
+              accountId: 'a',
+              folderId: 'f',
+              uid: 2,
+              subject: 'Read message',
+              fromName: 'Sender',
+              fromAddress: 'sender@example.com',
+              toRecipientsJson: '[]',
+              ccJson: '[]',
+              snippet: 'snippet',
+              sentAt: 1,
+              flagsBitmask: const Value(1),
+              bodyDownloaded: const Value(true),
+            ),
+          );
 
-    final repository = MailLocalRepository(
-      dataSource: MailLocalDataSource(database: db),
-    );
+      final repository = MailLocalRepository(
+        dataSource: MailLocalDataSource(database: db),
+      );
 
-    final unread = await repository.watchUnifiedInbox(unreadOnly: true).first;
-    expect(unread.map((email) => email.subject), <String>['Unread message']);
-    final folderEmails = await repository.watchFolderEmails('f').first;
-    expect(folderEmails, hasLength(2));
+      final unread = await repository.watchUnifiedInbox(unreadOnly: true).first;
+      expect(unread.map((email) => email.subject), <String>['Unread message']);
+      final folderEmails = await repository.watchFolderEmails('f').first;
+      expect(folderEmails, hasLength(2));
 
-    final events = <int>[];
-    final subscription = repository.watchEmail(emailLocalId).listen(
-      (email) => events.add(email?.attachments.length ?? -1),
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 30));
-    await db.into(db.dbAttachments).insert(
-          DbAttachmentsCompanion.insert(
-            id: 'att-1',
-            emailLocalId: emailLocalId,
-            partId: '2',
-            filename: 'image.png',
-            mimeType: 'image/png',
-            sizeBytes: 4,
-            contentId: const Value('logo@cid'),
-            isInline: const Value(true),
-          ),
-        );
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    await subscription.cancel();
+      final events = <int>[];
+      final subscription = repository
+          .watchEmail(emailLocalId)
+          .listen((email) => events.add(email?.attachments.length ?? -1));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      await db
+          .into(db.dbAttachments)
+          .insert(
+            DbAttachmentsCompanion.insert(
+              id: 'att-1',
+              emailLocalId: emailLocalId,
+              partId: '2',
+              filename: 'image.png',
+              mimeType: 'image/png',
+              sizeBytes: 4,
+              contentId: const Value('logo@cid'),
+              isInline: const Value(true),
+            ),
+          );
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await subscription.cancel();
 
-    expect(events.first, 0);
-    expect(events.last, 1);
-  });
+      expect(events.first, 0);
+      expect(events.last, 1);
+    },
+  );
 
-  test('disabling or deleting an account removes its emails from the stream',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    await _insertAccount(db);
-    await _insertFolder(db);
-    await _insertEmail(db);
-    final repository = MailLocalRepository(
-      dataSource: MailLocalDataSource(database: db),
-    );
-    final counts = <int>[];
-    final subscription = repository.watchUnifiedInbox().listen(
-      (emails) => counts.add(emails.length),
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 30));
-    expect(counts.last, 1);
+  test(
+    'disabling or deleting an account removes its emails from the stream',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _insertAccount(db);
+      await _insertFolder(db);
+      await _insertEmail(db);
+      final repository = MailLocalRepository(
+        dataSource: MailLocalDataSource(database: db),
+      );
+      final counts = <int>[];
+      final subscription = repository.watchUnifiedInbox().listen(
+        (emails) => counts.add(emails.length),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(counts.last, 1);
 
-    await (db.update(db.dbAccounts)..where((table) => table.id.equals('a')))
-        .write(const DbAccountsCompanion(isEnabled: Value(false)));
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    expect(counts.last, 0);
+      await (db.update(db.dbAccounts)..where((table) => table.id.equals('a')))
+          .write(const DbAccountsCompanion(isEnabled: Value(false)));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(counts.last, 0);
 
-    await (db.delete(db.dbAccounts)..where((table) => table.id.equals('a')))
-        .go();
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    expect(counts.last, 0);
-    await subscription.cancel();
-  });
+      await (db.delete(
+        db.dbAccounts,
+      )..where((table) => table.id.equals('a'))).go();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(counts.last, 0);
+      await subscription.cancel();
+    },
+  );
 
   test('empty remote folder clears stale local emails', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());

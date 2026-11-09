@@ -1,3 +1,4 @@
+import '../../../../core/error/failures.dart';
 import '../../../auth/domain/entities/mail_account.dart';
 import '../../data/repositories/mail_local_repository.dart';
 import '../../data/repositories/mail_remote_repository.dart';
@@ -21,9 +22,35 @@ class UpdateEmailFlagsUseCase {
     bool? isFlagged,
     bool? isAnswered,
   }) async {
+    final cached = await _localRepository.getEmail(emailLocalId);
+    if (cached == null) {
+      throw StateError('Local email $emailLocalId no longer exists');
+    }
+    return _localRepository.runFolderSync(
+      cached.folderId,
+      () => _perform(
+        account: account,
+        emailLocalId: emailLocalId,
+        isRead: isRead,
+        isFlagged: isFlagged,
+        isAnswered: isAnswered,
+      ),
+    );
+  }
+
+  Future<UnifiedEmail> _perform({
+    required MailAccount account,
+    required int emailLocalId,
+    bool? isRead,
+    bool? isFlagged,
+    bool? isAnswered,
+  }) async {
     final email = await _localRepository.getEmail(emailLocalId);
     if (email == null) {
       throw StateError('Local email $emailLocalId no longer exists');
+    }
+    if (account.id != email.accountId) {
+      throw const StorageFailure(userMessage: '邮件不属于当前账户，操作已阻止。');
     }
     final folder = await _localRepository.getFolderById(email.folderId);
     if (folder == null) {

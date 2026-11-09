@@ -41,7 +41,7 @@ final class UnifiedInboxViewProvider
   }
 }
 
-String _$unifiedInboxViewHash() => r'7a9d325ec35facc9473a32121bdad52621bba1f2';
+String _$unifiedInboxViewHash() => r'923c988ed9f482a4f78295419981f237fb1ac8a3';
 
 abstract class _$UnifiedInboxView extends $Notifier<UnifiedInboxViewState> {
   UnifiedInboxViewState build();
