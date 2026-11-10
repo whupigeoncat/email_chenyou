@@ -1,0 +1,512 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-10T17:08:53Z",
+  "title": "Design System: 本地邮箱",
+  "extensions": {
+    "colorMeta": {
+      "klein-blue": {
+        "role": "primary",
+        "displayName": "Klein Blue",
+        "canonical": "#002FA7",
+        "tonalRamp": [
+          "#00143F",
+          "#00164D",
+          "#001F70",
+          "#002FA7",
+          "#2A52BE",
+          "#5C7FD1",
+          "#A9C3FF",
+          "#DCE6FF"
+        ]
+      },
+      "klein-blue-soft": {
+        "role": "primary",
+        "displayName": "Klein Blue Soft",
+        "canonical": "#E4EBFF",
+        "tonalRamp": [
+          "#0B1B3D",
+          "#12295C",
+          "#1D3D87",
+          "#2C55B4",
+          "#5478CE",
+          "#8AA3E4",
+          "#C2D1F5",
+          "#E4EBFF"
+        ]
+      },
+      "blue-night-accent": {
+        "role": "primary",
+        "displayName": "Night Blue Accent",
+        "canonical": "#A9C3FF",
+        "tonalRamp": [
+          "#233A66",
+          "#2E4C85",
+          "#3D62A6",
+          "#557ECB",
+          "#7A9DEC",
+          "#A9C3FF",
+          "#C9DAFF",
+          "#E5EDFF"
+        ]
+      },
+      "ivory": {
+        "role": "neutral",
+        "displayName": "Warm Ivory",
+        "canonical": "#F7F7F2",
+        "tonalRamp": [
+          "#151512",
+          "#2B2B26",
+          "#55554C",
+          "#8A8A80",
+          "#B9B9AF",
+          "#DCDCD4",
+          "#EDEDE7",
+          "#F7F7F2"
+        ]
+      },
+      "paper-white": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#17181A",
+          "#33353A",
+          "#5A5D64",
+          "#8A8E96",
+          "#B6BAC2",
+          "#DCDFE5",
+          "#F2F3F6",
+          "#FFFFFF"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Mail Ink",
+        "canonical": "#17213B",
+        "tonalRamp": [
+          "#0A0F1B",
+          "#101828",
+          "#17213B",
+          "#33405F",
+          "#5B688A",
+          "#8B96B3",
+          "#C2C9DB",
+          "#E9EDF7"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#5A6478",
+        "tonalRamp": [
+          "#141821",
+          "#242A36",
+          "#3A4252",
+          "#5A6478",
+          "#7E8797",
+          "#A7AFBC",
+          "#CFD4DC",
+          "#EFF1F4"
+        ]
+      },
+      "navy-night": {
+        "role": "neutral",
+        "displayName": "Deep Sea Night",
+        "canonical": "#0B1328",
+        "tonalRamp": [
+          "#04070F",
+          "#070E1F",
+          "#0B1328",
+          "#13203C",
+          "#1F3050",
+          "#3A4D70",
+          "#7484A3",
+          "#B2BDD4"
+        ]
+      },
+      "navy-panel-night": {
+        "role": "neutral",
+        "displayName": "Night Panel",
+        "canonical": "#0F1A31",
+        "tonalRamp": [
+          "#050B17",
+          "#0A1223",
+          "#0F1A31",
+          "#172845",
+          "#243758",
+          "#415677",
+          "#7C8DA8",
+          "#C0CADD"
+        ]
+      },
+      "navy-menu-night": {
+        "role": "neutral",
+        "displayName": "Night Menu",
+        "canonical": "#192845",
+        "tonalRamp": [
+          "#060C18",
+          "#0B1426",
+          "#111E36",
+          "#192845",
+          "#25395E",
+          "#3F5883",
+          "#7C90B4",
+          "#C4CFE1"
+        ]
+      },
+      "navy-snackbar-night": {
+        "role": "neutral",
+        "displayName": "Night Snackbar",
+        "canonical": "#1F3050",
+        "tonalRamp": [
+          "#080E1A",
+          "#101A2D",
+          "#182642",
+          "#1F3050",
+          "#2E456C",
+          "#4F6791",
+          "#8A9DBD",
+          "#CAD4E4"
+        ]
+      },
+      "hairline-day": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#E3E4DF",
+        "tonalRamp": [
+          "#3C3C38",
+          "#5C5C57",
+          "#85857F",
+          "#ADADA6",
+          "#C5C6BF",
+          "#D4D5CF",
+          "#E3E4DF",
+          "#F7F7F2"
+        ]
+      },
+      "track-day": {
+        "role": "neutral",
+        "displayName": "Filter Track",
+        "canonical": "#E9ECF3",
+        "tonalRamp": [
+          "#1F232C",
+          "#3A3F4C",
+          "#5A6070",
+          "#7E8595",
+          "#A2A9B8",
+          "#C7CCD8",
+          "#E9ECF3",
+          "#F5F7FA"
+        ]
+      },
+      "field-day": {
+        "role": "neutral",
+        "displayName": "Field Fill",
+        "canonical": "#F4F5F1",
+        "tonalRamp": [
+          "#2A2B26",
+          "#45463F",
+          "#6A6B62",
+          "#8F9087",
+          "#B3B4AA",
+          "#D5D6CC",
+          "#F4F5F1",
+          "#FBFBF8"
+        ]
+      },
+      "avatar-day": {
+        "role": "secondary",
+        "displayName": "Avatar Wash",
+        "canonical": "#E9EEF9",
+        "tonalRamp": [
+          "#142A55",
+          "#1F3B75",
+          "#2D529B",
+          "#4D74C0",
+          "#7C9AD6",
+          "#A9BFE7",
+          "#D3DFF5",
+          "#E9EEF9"
+        ]
+      },
+      "success-day": {
+        "role": "tertiary",
+        "displayName": "Connected Green",
+        "canonical": "#1D6B4A",
+        "tonalRamp": [
+          "#05251A",
+          "#0A3B2A",
+          "#12513B",
+          "#1D6B4A",
+          "#2F8B63",
+          "#5FB08A",
+          "#9FD3B8",
+          "#DDF1E5"
+        ]
+      },
+      "warning-day": {
+        "role": "tertiary",
+        "displayName": "Star Amber",
+        "canonical": "#8A5300",
+        "tonalRamp": [
+          "#2B1A00",
+          "#4A2C00",
+          "#6B3F00",
+          "#8A5300",
+          "#B06F14",
+          "#D19A45",
+          "#EBC78C",
+          "#FAEBD3"
+        ]
+      },
+      "danger-day": {
+        "role": "tertiary",
+        "displayName": "Error Red",
+        "canonical": "#B3261E",
+        "tonalRamp": [
+          "#3B0805",
+          "#5E0F0A",
+          "#8C1A14",
+          "#B3261E",
+          "#D14A41",
+          "#E5817A",
+          "#F3B8B3",
+          "#FBE4E1"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Inbox Display",
+        "purpose": "The current folder name in the phone header only; once per screen."
+      },
+      "headline": {
+        "displayName": "Page Headline",
+        "purpose": "Embedded page titles where the blue header is absent."
+      },
+      "headline-small": {
+        "displayName": "Reading Headline",
+        "purpose": "Message subject inside the reading header card."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Dialog titles, verification codes, and compact header titles."
+      },
+      "title-small": {
+        "displayName": "Row Title",
+        "purpose": "List primary rows, account names, and section headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Message body, navigation labels, and scope line."
+      },
+      "body-large": {
+        "displayName": "List Row Text",
+        "purpose": "Primary list rows, the reader sender line, and field input text."
+      },
+      "body-small": {
+        "displayName": "Meta",
+        "purpose": "Snippets, dates, account metadata, and helper text."
+      },
+      "label": {
+        "displayName": "Control Label",
+        "purpose": "Buttons, filter segments, the selection pill, and sender names."
+      },
+      "label-strong": {
+        "displayName": "Primary Action Label",
+        "purpose": "The filled primary button, which overrides the label weight to 700."
+      },
+      "label-small": {
+        "displayName": "Time Label",
+        "purpose": "Message timestamps in tabular figures and connection state text."
+      }
+    },
+    "shadows": [
+      {
+        "name": "compose-elevation",
+        "value": "Material elevation 3, pressed 2 (resolved by the platform; no custom box-shadow)",
+        "purpose": "The floating compose action stays reachable above scrolling mail."
+      },
+      {
+        "name": "native-modal-elevation",
+        "value": "Material defaults for dialog, drawer, popup menu and snackbar (platform-resolved; not overridden)",
+        "purpose": "Modal surfaces keep the framework's native lift; the system defines no custom or decorative shadow."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press",
+        "value": "140ms cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "Label color change in the filter switch and the account chevron rotation."
+      },
+      {
+        "name": "sidebar-reveal",
+        "value": "220ms cubic-bezier(0.2, 0, 0, 1) in, 220ms cubic-bezier(0.4, 0, 1, 1) out",
+        "purpose": "Account folder expansion: size plus fade, top-center aligned; no motion when reduced motion is on."
+      },
+      {
+        "name": "selection-spring",
+        "value": "spring, 420ms duration, bounce 0.12, retargets from current velocity",
+        "purpose": "The single selection pill. Interruptible mid-flight; resolves instantly when the OS reports reduced motion."
+      },
+      {
+        "name": "native-route",
+        "value": "Android PredictiveBackPageTransitionsBuilder; iOS/macOS CupertinoPageTransitionsBuilder",
+        "purpose": "Fuchsia/Linux/Windows use the shared restrained fade and 0.012 vertical offset; platform route timing is retained."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sidebar",
+        "value": "960px",
+        "purpose": "Below this the shell is one column with a drawer; at or above it the sidebar joins the list."
+      },
+      {
+        "name": "three-pane",
+        "value": "1200px",
+        "purpose": "Adds the reading pane beside the list."
+      },
+      {
+        "name": "compact-height",
+        "value": "520px",
+        "purpose": "Phone header collapses to one 52dp row and the scope line moves into the drawer."
+      },
+      {
+        "name": "compact-sidebar",
+        "value": "440px",
+        "purpose": "Sidebar becomes a single scroll surface with the footer inside the list."
+      },
+      {
+        "name": "reading-measure",
+        "value": "820px",
+        "purpose": "Maximum width of the reading column, centered."
+      }
+    ],
+    "layout": {
+      "sidebarWidth": "22% of viewport, clamped to 250–300dp",
+      "detailWidth": "34% of viewport, clamped to 340–480dp",
+      "mailRowMinHeight": "110dp",
+      "touchTarget": "48dp minimum on every interactive control",
+      "panelJoin": "28dp top radius between the blue phone header and the opaque reading panel"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-filled",
+      "description": "Day-theme filled primary action; night uses current primary/onPrimary roles. Brand-blue FAB and filter stay fixed.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">添加邮箱账户</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; height: 48px; padding: 0 18px; border: 0; border-radius: 14px; background: #002FA7; color: #FFFFFF; font: 700 14px/1.43 system-ui, -apple-system, sans-serif; cursor: pointer; } .ds-btn-primary:hover { box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.08); } .ds-btn-primary:active { box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.12); } .ds-btn-primary:focus-visible { outline: 3px solid rgba(0, 47, 167, 0.35); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.38; cursor: default; }"
+    },
+    {
+      "name": "Outlined Button",
+      "kind": "button",
+      "refersTo": "button-outlined",
+      "description": "Quiet secondary action used for reply, reply-all and forward. Hairline border on transparent ground.",
+      "html": "<button class=\"ds-btn-outlined\" type=\"button\">全部回复</button>",
+      "css": ".ds-btn-outlined { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 48px; height: 48px; padding: 0 16px; border: 1px solid #E3E4DF; border-radius: 14px; background: transparent; color: #002FA7; font: 600 14px/1.43 system-ui, -apple-system, sans-serif; cursor: pointer; } .ds-btn-outlined:hover { box-shadow: inset 0 0 0 999px rgba(0, 47, 167, 0.06); } .ds-btn-outlined:active { box-shadow: inset 0 0 0 999px rgba(0, 47, 167, 0.1); } .ds-btn-outlined:focus-visible { outline: 3px solid rgba(0, 47, 167, 0.35); outline-offset: 2px; }"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Filled field with a 1dp hairline that turns Klein blue at 1.6dp on focus. Text is 16sp; no outer glow.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">收件人</span><input class=\"ds-field-input\" type=\"email\" placeholder=\"name@example.com\"></label>",
+      "css": ".ds-field { display: grid; gap: 6px; font: 400 12px/1.4 system-ui, -apple-system, sans-serif; color: #5A6478; } .ds-field-input { box-sizing: border-box; width: 100%; padding: 14px; border: 1px solid #E3E4DF; border-radius: 14px; background: #F4F5F1; color: #17213B; font: 400 16px/1.45 system-ui, -apple-system, sans-serif; } .ds-field-input::placeholder { color: #5A6478; } .ds-field-input:hover { border-color: #C7CBD2; } .ds-field-input:focus-visible { outline: none; border-color: #002FA7; border-width: 1.6px; } .ds-field-input:disabled { opacity: 0.38; }"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "48dp rounded list row. The selected account or unified inbox gets the soft blue fill and deep blue text, never a side bar.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"邮箱\"><button class=\"ds-nav-item ds-nav-item-selected\" type=\"button\" aria-current=\"page\">聚合收件箱</button><button class=\"ds-nav-item\" type=\"button\">账户管理</button></nav>",
+      "css": ".ds-nav { display: grid; gap: 2px; width: 260px; padding: 8px; background: #F7F7F2; border-radius: 14px; font-family: system-ui, -apple-system, sans-serif; } .ds-nav-item { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 10px 16px; border: 0; border-radius: 14px; background: transparent; color: #17213B; font: 400 16px/1.5 system-ui, -apple-system, sans-serif; text-align: left; cursor: pointer; } .ds-nav-item:hover { box-shadow: inset 0 0 0 999px rgba(0, 47, 167, 0.05); } .ds-nav-item-selected { background: #E4EBFF; color: #00164D; } .ds-nav-item:focus-visible { outline: 3px solid rgba(0, 47, 167, 0.35); outline-offset: 1px; }"
+    },
+    {
+      "name": "Filter Switch",
+      "kind": "chip",
+      "refersTo": "filter-switch",
+      "description": "Signature all/unread control: a 56dp stadium track holding one Klein-blue pill. Only the pill moves; labels never resize. The browser analog uses a short ease, the app uses a 420ms spring at bounce 0.12 with instant reduced-motion placement.",
+      "html": "<div class=\"ds-filter\" role=\"tablist\" aria-label=\"邮件筛选\"><button class=\"ds-filter-seg ds-filter-seg-on\" type=\"button\" role=\"tab\" aria-selected=\"true\">全部</button><button class=\"ds-filter-seg\" type=\"button\" role=\"tab\" aria-selected=\"false\">未读</button></div>",
+      "css": ".ds-filter { display: inline-flex; align-items: center; padding: 4px; border-radius: 999px; background: #E9ECF3; font-family: system-ui, -apple-system, sans-serif; } .ds-filter-seg { min-width: 84px; height: 48px; padding: 0 20px; border: 0; border-radius: 999px; background: transparent; color: #5A6478; font: 600 14px/1.43 system-ui, -apple-system, sans-serif; cursor: pointer; transition: background-color 220ms cubic-bezier(0.2, 0, 0, 1), color 140ms cubic-bezier(0.2, 0, 0, 1); } .ds-filter-seg:hover { box-shadow: inset 0 0 0 999px rgba(0, 47, 167, 0.05); } .ds-filter-seg-on { background: #002FA7; color: #FFFFFF; font-weight: 600; } .ds-filter-seg:focus-visible { outline: 3px solid rgba(0, 47, 167, 0.35); outline-offset: 2px; } @media (prefers-reduced-motion: reduce) { .ds-filter-seg { transition: none; } }"
+    },
+    {
+      "name": "Reading Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Opaque 18dp card with a 1dp hairline, zero shadow, 16dp padding. Reading header, verification code and attachments share this shell.",
+      "html": "<article class=\"ds-card\"><h3 class=\"ds-card-title\">您的 Google 验证码</h3><p class=\"ds-card-meta\">Google &lt;no-reply@example.com&gt; · 2026-11-10 09:41</p><p class=\"ds-card-body\">使用此验证码完成身份验证。此邮件由系统自动发送。</p></article>",
+      "css": ".ds-card { box-sizing: border-box; max-width: 360px; padding: 16px; border: 1px solid #E3E4DF; border-radius: 18px; background: #FFFFFF; color: #17213B; box-shadow: none; font-family: system-ui, -apple-system, sans-serif; } .ds-card-title { margin: 0 0 10px; font: 700 24px/1.33 system-ui, -apple-system, sans-serif; letter-spacing: -0.3px; } .ds-card-meta { margin: 0 0 4px; color: #5A6478; font: 400 12px/1.4 system-ui, -apple-system, sans-serif; } .ds-card-body { margin: 0; font: 400 14px/1.45 system-ui, -apple-system, sans-serif; }"
+    },
+    {
+      "name": "Compose Action",
+      "kind": "custom",
+      "refersTo": "compose-action",
+      "description": "A raised Klein-blue extended action pinned lower right on phones, with a 22dp radius, Material elevation 3 and a 20dp pencil.",
+      "html": "<button class=\"ds-compose\" type=\"button\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m14 5 5 5M4 20l1-6L17 2l5 5L10 19Z\"/></svg><span>写邮件</span></button>",
+      "css": ".ds-compose { display: inline-flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 20px; border: 0; border-radius: 22px; background: #002FA7; color: #FFFFFF; font: 600 14px/1.43 system-ui, -apple-system, sans-serif; cursor: pointer; } .ds-compose svg { flex: none; } .ds-compose:hover { box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.08); } .ds-compose:active { box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.12); } .ds-compose:focus-visible { outline: 3px solid rgba(0, 47, 167, 0.35); outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Klein Current（克莱因流）",
+    "overview": "本地邮箱的视觉系统是一条稳定电流：导航与选择由克莱因蓝承担，阅读表面保持不透明的安静，交互时的主要运动对象是筛选胶囊，静止时不运行装饰动画。页面不靠装饰、模糊或透明度表达“流动”，而靠颜色占比、连续曲率和一个可以被中途改意的弹性位移，让操作读起来像一股不间断的水流。系统的密度是中等偏舒适的：邮件行至少 110dp 高，行距足以扫读发件人、主题与时间；导航、控件与容器共享同一套圆角家族，避免相邻表面出现互不相干的曲率。层次靠实心表面之间的明度差与 1dp 发丝线建立，卡片与列表默认平铺；模态面板沿用 Material 原生抬升，系统没有自定义或装饰性阴影。这套世界同时服务手机与电脑：手机主界面是蓝色头部加一张上圆角的白色阅读面板，其他阅读与设置页面仍使用当前主题的表面色顶栏；电脑是同一语言下的两栏或三栏。栏数改变，配色、字体层级、圆角与控制手感不变。",
+    "keyCharacteristics": [
+      "克莱因蓝只做导航、选择与主操作；大面积留给象牙白/纸白或深夜蓝。",
+      "所有承托表面不透明；流动感来自运动与曲率，不来自模糊或半透明。",
+      "层级靠字重、字距、明度差与发丝线，不靠多字体家族。",
+      "控件圆角来自同一家族（14/18/22/24/28），胶囊是唯一的全圆角。",
+      "唯一的签名动效是筛选胶囊的弹性位移，且可被中断、可被系统“减少动画”即时取消。"
+    ],
+    "rules": [
+      {
+        "name": "The Klein Constant Rule",
+        "body": "克莱因蓝是导航与选择的常量。夜间模式替换表面、文字和小面积强调，不替换这块蓝；任何新界面都不得引入第二个“主色”与它竞争。手机主界面的蓝色头部是允许的大面积用色——占比服从页面角色，而不是一条全局的“少用蓝”配额。",
+        "section": "colors"
+      },
+      {
+        "name": "The Opaque Bearing Rule",
+        "body": "承托邮件的表面必须不透明。不要用毛玻璃、背景模糊、半透明蒙层来表现流动或层级；Material 标准的状态层与过渡透明度不受此限。",
+        "section": "colors"
+      },
+      {
+        "name": "The One Family Rule",
+        "body": "只用系统文本字体家族。层级由字重、字号、字距与颜色完成，不新增展示字体或额外字体依赖；图标沿用框架自带的 MaterialIcons，需要“更强调”时先加字重或提高对比，而不是换字体。",
+        "section": "typography"
+      },
+      {
+        "name": "The Still Label Rule",
+        "body": "选择态切换时，标签文字的位置、字号与行高不变，只换颜色。运动属于胶囊，不属于文字。",
+        "section": "typography"
+      },
+      {
+        "name": "The Native-Lift Rule",
+        "body": "静止的卡片、AppBar、列表与侧栏保持 elevation 0，需要分层时先换表面色或加发丝线。对话框、菜单、抽屉、底部面板与 Snackbar 沿用 Material 原生 elevation；不要为它们手写阴影，也不要把写信按钮的 elevation 复制到普通表面。",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Curvature Rule",
+        "body": "同一屏内的容器只从 14/18/22/24/28 中取用，并保持“越小越方、越大越圆”的顺序。不要为单个组件发明 8dp 或 12dp 的孤立圆角；胶囊只属于选择控件。",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do 用 `colors.klein-blue` 承担导航、选择、未读标记和主操作；其余表面保持纸白/象牙白或深夜蓝。",
+      "Do 让手机阅读面板保持 28dp 上圆角与实心底色，用弧线切开蓝色头部，不用投影或半透明过渡。",
+      "Do 用字重、字距、字色与发丝线建立层级；标题收紧字距（−0.2 至 −0.8），正文保持 1.4–1.45 行高。",
+      "Do 让时间列使用等宽数字，并让右列随系统字号增宽，保证大字体下最后一位不被裁切。",
+      "Do 所有可点目标保持至少 48dp 的响应区域；图标按钮保留 tooltip，并保留原生焦点、键盘与系统返回手势。",
+      "Do 选择态只移动胶囊，文字位置与字号保持不变；开启减少动画时即时落位。",
+      "Do 需要分层时先换不透明表面色或加 1dp 发丝线；只有模态与悬浮动作使用原生抬升。"
+    ],
+    "donts": [
+      "Don't 使用毛玻璃、背景模糊、半透明面板或渐变来表现“流动”；流动由运动、曲率和蓝色占比表达。",
+      "Don't 捆绑或声明自有的展示字体，也不要新增图标字体依赖；文本走系统字体，图标使用框架自带的 MaterialIcons。",
+      "Don't 为卡片、列表与侧栏手写投影，也不要把写信按钮的 elevation 复制到普通表面；对话框、菜单、抽屉、底部面板与 Snackbar 的原生抬升不在此限。",
+      "Don't 引入第二品牌色；success/warning/danger 只用于状态，星标与连接状态也不得扩散成大色块。",
+      "Don't 为单个组件发明家族外的圆角，或把胶囊圆角用于普通容器。",
+      "Don't 在选择动画中缩放、位移或改写标签文字，也不要在静止界面保留装饰性循环动画。",
+      "Don't 覆盖 Android 预测性返回、iOS/macOS 边缘返回手势的时序；只有 Windows/Linux 桌面使用克制的淡入 + 微位移路由。"
+    ]
+  }
+}

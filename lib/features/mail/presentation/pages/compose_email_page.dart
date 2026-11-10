@@ -290,10 +290,7 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
                     TextField(
                       key: const Key('compose-subject'),
                       controller: _subjectController,
-                      decoration: const InputDecoration(
-                        labelText: '主题',
-                        border: OutlineInputBorder(),
-                      ),
+                      decoration: const InputDecoration(labelText: '主题'),
                     ),
                     const SizedBox(height: 10),
                     Wrap(
@@ -346,7 +343,6 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
                         maxLines: 20,
                         decoration: const InputDecoration(
                           labelText: '正文',
-                          border: OutlineInputBorder(),
                           alignLabelWithHint: true,
                         ),
                       )
@@ -358,7 +354,6 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
                         maxLines: 20,
                         decoration: const InputDecoration(
                           labelText: 'HTML 正文',
-                          border: OutlineInputBorder(),
                           alignLabelWithHint: true,
                         ),
                       ),
@@ -473,7 +468,6 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
                   decoration: const InputDecoration(
                     labelText: '发件账户',
                     isDense: true,
-                    border: OutlineInputBorder(),
                   ),
                   items: [
                     for (final account in accounts)
@@ -950,7 +944,6 @@ class _RecipientField extends StatelessWidget {
             labelText: label,
             hintText: '多个地址用逗号或分号分隔',
             isDense: true,
-            border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.add),
               onPressed: submit,

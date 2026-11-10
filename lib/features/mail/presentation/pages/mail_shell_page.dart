@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/di/app_runtime_providers.dart';
 import '../../../../app/di/core_providers.dart';
+import '../../../../app/motion/mail_motion.dart';
+import '../../../../app/theme/mail_theme.dart';
 import '../../../../core/network/account_connection_slot.dart';
 import '../../../auth/domain/entities/mail_account.dart';
 import '../../../auth/presentation/pages/account_manage_page.dart';
@@ -39,6 +42,7 @@ class _MailShellPageState extends ConsumerState<MailShellPage> {
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int? _selectedEmailLocalId;
+  bool _drawerOpen = false;
 
   /// Explicit per-account overrides. Absence falls back to the default:
   /// a single account is expanded, otherwise only the selected account.
@@ -137,6 +141,7 @@ class _MailShellPageState extends ConsumerState<MailShellPage> {
                     ? _EmptyAccountCard(onAdd: () => _openAddAccount(context))
                     : UnifiedInboxPage(
                         embedded: true,
+                        scopeLabel: _scopeLabel(accounts, view),
                         onOpenEmail: (email) {
                           if (threePane) {
                             setState(
@@ -255,65 +260,254 @@ class _MailShellPageState extends ConsumerState<MailShellPage> {
     UnifiedInboxViewState view,
     AsyncValue<List<MailAccount>> accountsAsync,
   ) {
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppBar(
-        leading: IconButton(
-          key: const Key('open-mail-drawer'),
-          tooltip: '打开邮箱侧栏',
-          icon: const Icon(Icons.menu),
-          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-        ),
-        title: Text(view.title),
-        actions: [
-          if (BatteryNotificationPlatform.instance.isSupported)
-            IconButton(
-              key: const Key('open-notification-settings'),
-              tooltip: '通知设置',
-              onPressed: () => _openNotificationSettings(context),
-              icon: const Icon(Icons.notifications_outlined),
+    return PopScope(
+      // The drawer is a local overlay on the root route. Without an explicit
+      // PopScope Android Back leaves the activity instead of closing it.
+      // Compose routes keep their own PopScope and dirty-draft guards.
+      canPop: !_drawerOpen,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !_drawerOpen) return;
+        _scaffoldKey.currentState?.closeDrawer();
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: MailColors.brandBlue,
+        onDrawerChanged: (opened) {
+          if (_drawerOpen != opened) setState(() => _drawerOpen = opened);
+        },
+        drawer: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: _surfaceSystemUiStyle(context),
+          child: Drawer(
+            child: SafeArea(
+              child: _buildSidebar(
+                context,
+                accounts,
+                slots,
+                view,
+                accountsAsync.error,
+                onFolderSelected: () => Navigator.of(context).pop(),
+              ),
             ),
-          IconButton(
-            key: const Key('open-search'),
-            tooltip: '搜索',
-            onPressed: () => _openSearch(context),
-            icon: const Icon(Icons.search),
-          ),
-          IconButton(
-            key: const Key('compose-mail'),
-            tooltip: '撰写邮件',
-            onPressed: () => _openCompose(context),
-            icon: const Icon(Icons.edit_outlined),
-          ),
-        ],
-      ),
-      drawer: Drawer(
-        child: SafeArea(
-          child: _buildSidebar(
-            context,
-            accounts,
-            slots,
-            view,
-            accountsAsync.error,
-            onFolderSelected: () => Navigator.of(context).pop(),
           ),
         ),
-      ),
-      body: accounts.isEmpty
-          ? _EmptyAccountCard(onAdd: () => _openAddAccount(context))
-          : UnifiedInboxPage(
-              embedded: true,
-              onOpenEmail: (email) {
-                final localId = email.localId;
-                if (localId == null) return;
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => EmailDetailPage(emailLocalId: localId),
-                  ),
-                );
-              },
+        body: Column(
+          children: [
+            AnnotatedRegion<SystemUiOverlayStyle>(
+              key: const Key('mobile-system-ui'),
+              value: _mobileSystemUiStyle(context),
+              child: _buildMobileHeader(context, accounts, view),
             ),
+            Expanded(
+              child: Material(
+                color: MailColors.panel(context),
+                borderRadius: MailShapes.panelTop,
+                clipBehavior: Clip.antiAlias,
+                child: accounts.isEmpty
+                    ? _EmptyAccountCard(onAdd: () => _openAddAccount(context))
+                    : UnifiedInboxPage(
+                        embedded: true,
+                        showTitle: false,
+                        onOpenEmail: (email) {
+                          final localId = email.localId;
+                          if (localId == null) return;
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  EmailDetailPage(emailLocalId: localId),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
+        ),
+        floatingActionButton: accounts.isEmpty
+            ? null
+            : FloatingActionButton.extended(
+                key: const Key('compose-mail'),
+                onPressed: () => _openCompose(context),
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                label: const Text('写邮件'),
+              ),
+      ),
     );
+  }
+
+  Widget _buildMobileHeader(
+    BuildContext context,
+    List<MailAccount> accounts,
+    UnifiedInboxViewState view,
+  ) {
+    final theme = Theme.of(context);
+    final foreground = MailColors.toolbarForeground(theme.brightness);
+    final muted = MailColors.toolbarMuted(theme.brightness);
+    // Landscape and split-screen leave very little height. Keep the approved
+    // portrait composition, but in compact height put the current folder in
+    // the toolbar and let the drawer carry the scope row.
+    final compact = MediaQuery.sizeOf(context).height < 520;
+    return Container(
+      color: MailColors.brandBlue,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(6, 2, 6, compact ? 8 : 18),
+          child: compact
+              ? SizedBox(
+                  height: 52,
+                  child: Row(
+                    children: [
+                      _mobileDrawerButton(foreground),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          _inboxTitle(view),
+                          key: const Key('mobile-inbox-title'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: foreground,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      _mobileHeaderActions(context, foreground),
+                    ],
+                  ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      height: 52,
+                      child: Row(
+                        children: [
+                          _mobileDrawerButton(foreground),
+                          const SizedBox(width: 2),
+                          Expanded(
+                            child: Text(
+                              '本地邮箱',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: foreground,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          _mobileHeaderActions(context, foreground),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _inboxTitle(view),
+                            key: const Key('mobile-inbox-title'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.displaySmall?.copyWith(
+                              color: foreground,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Semantics(
+                            button: true,
+                            label: '切换邮箱范围',
+                            child: InkWell(
+                              key: const Key('inbox-scope'),
+                              onTap: () =>
+                                  _scaffoldKey.currentState?.openDrawer(),
+                              customBorder: const StadiumBorder(),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  minHeight: 48,
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          _scopeLabel(accounts, view),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(color: muted),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.chevron_right,
+                                        size: 18,
+                                        color: muted,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileDrawerButton(Color foreground) {
+    return IconButton(
+      key: const Key('open-mail-drawer'),
+      tooltip: '打开邮箱侧栏',
+      color: foreground,
+      onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+      icon: const Icon(Icons.menu),
+    );
+  }
+
+  Widget _mobileHeaderActions(BuildContext context, Color foreground) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (BatteryNotificationPlatform.instance.isSupported)
+          IconButton(
+            key: const Key('open-notification-settings'),
+            tooltip: '通知设置',
+            color: foreground,
+            onPressed: () => _openNotificationSettings(context),
+            icon: const Icon(Icons.notifications_outlined),
+          ),
+        IconButton(
+          key: const Key('open-search'),
+          tooltip: '搜索',
+          color: foreground,
+          onPressed: () => _openSearch(context),
+          icon: const Icon(Icons.search),
+        ),
+      ],
+    );
+  }
+
+  String _inboxTitle(UnifiedInboxViewState view) {
+    return view.folder?.displayName ?? '收件箱';
+  }
+
+  String _scopeLabel(List<MailAccount> accounts, UnifiedInboxViewState view) {
+    final accountId = view.accountId;
+    if (accountId == null) return '所有邮箱';
+    for (final account in accounts) {
+      if (account.id == accountId) return account.email;
+    }
+    return '所选邮箱';
   }
 
   Widget _buildSidebar(
@@ -384,23 +578,35 @@ class _MailShellPageState extends ConsumerState<MailShellPage> {
           viewNotifier,
           onFolderSelected,
         ),
-        if (_isAccountExpanded(account, accounts, view))
-          _FolderList(
-            accountId: account.id,
-            selectedFolderId: view.accountId == account.id
-                ? view.folder?.id
-                : null,
-            onSelected: (folder) {
-              setState(() {
-                _selectedEmailLocalId = null;
-                _collapsedAccountIds.remove(account.id);
-                _expandedAccountIds.add(account.id);
-              });
-              viewNotifier.selectAccount(account.id);
-              unawaited(viewNotifier.openFolder(folder));
-              onFolderSelected?.call();
-            },
+        AnimatedSwitcher(
+          duration: MailMotion.duration(context, MailMotion.standard),
+          switchInCurve: MailMotion.standardCurve,
+          switchOutCurve: MailMotion.exitCurve,
+          transitionBuilder: (child, animation) => SizeTransition(
+            sizeFactor: animation,
+            alignment: Alignment.topCenter,
+            child: FadeTransition(opacity: animation, child: child),
           ),
+          child: _isAccountExpanded(account, accounts, view)
+              ? _FolderList(
+                  key: ValueKey('folder-list-${account.id}'),
+                  accountId: account.id,
+                  selectedFolderId: view.accountId == account.id
+                      ? view.folder?.id
+                      : null,
+                  onSelected: (folder) {
+                    setState(() {
+                      _selectedEmailLocalId = null;
+                      _collapsedAccountIds.remove(account.id);
+                      _expandedAccountIds.add(account.id);
+                    });
+                    viewNotifier.selectAccount(account.id);
+                    unawaited(viewNotifier.openFolder(folder));
+                    onFolderSelected?.call();
+                  },
+                )
+              : SizedBox(key: ValueKey('folder-list-empty-${account.id}')),
+        ),
       ],
     ];
 
@@ -486,7 +692,7 @@ class _MailShellPageState extends ConsumerState<MailShellPage> {
           Icon(
             _slotIcon(slots[account.id]),
             size: 12,
-            color: _slotColor(slots[account.id]),
+            color: _slotColor(context, slots[account.id]),
           ),
           const SizedBox(width: 4),
           Expanded(
@@ -509,11 +715,44 @@ class _MailShellPageState extends ConsumerState<MailShellPage> {
           onPressed: () => _setAccountExpanded(account.id, expanded),
           icon: AnimatedRotation(
             turns: expanded ? 0.0 : -0.25,
-            duration: const Duration(milliseconds: 150),
+            duration: MailMotion.duration(context, MailMotion.quick),
+            curve: MailMotion.standardCurve,
             child: const Icon(Icons.expand_more),
           ),
         ),
       ),
+    );
+  }
+
+  /// The blue phone header needs light status icons in both themes. The
+  /// navigation bar follows the opaque reading surface below it.
+  SystemUiOverlayStyle _mobileSystemUiStyle(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return SystemUiOverlayStyle.light.copyWith(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: MailColors.panel(context),
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: dark
+          ? Brightness.light
+          : Brightness.dark,
+      systemNavigationBarContrastEnforced: false,
+    );
+  }
+
+  /// Drawers and reading surfaces use automatic light/dark system chrome.
+  SystemUiOverlayStyle _surfaceSystemUiStyle(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final base = dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark;
+    return base.copyWith(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: MailColors.panel(context),
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: dark
+          ? Brightness.light
+          : Brightness.dark,
+      systemNavigationBarContrastEnforced: false,
     );
   }
 
@@ -595,14 +834,16 @@ class _MailShellPageState extends ConsumerState<MailShellPage> {
     };
   }
 
-  static Color _slotColor(ConnectionSlotState? state) {
+  static Color _slotColor(BuildContext context, ConnectionSlotState? state) {
     return switch (state) {
-      ConnectionSlotState.idleInInbox => Colors.green,
-      ConnectionSlotState.pollingInInbox => Colors.teal,
-      ConnectionSlotState.busyInInbox => Colors.blue,
-      ConnectionSlotState.connecting => Colors.orange,
-      ConnectionSlotState.backoffWaiting => Colors.orange,
-      _ => Colors.grey,
+      ConnectionSlotState.idleInInbox => MailColors.success(context),
+      ConnectionSlotState.pollingInInbox => Theme.of(
+        context,
+      ).colorScheme.primary,
+      ConnectionSlotState.busyInInbox => Theme.of(context).colorScheme.primary,
+      ConnectionSlotState.connecting => MailColors.warning(context),
+      ConnectionSlotState.backoffWaiting => MailColors.warning(context),
+      _ => MailColors.muted(context),
     };
   }
 
@@ -639,6 +880,7 @@ class _OutboxBadge extends StatelessWidget {
 
 class _FolderList extends ConsumerWidget {
   const _FolderList({
+    super.key,
     required this.accountId,
     required this.selectedFolderId,
     required this.onSelected,

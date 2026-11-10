@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../app/di/core_providers.dart';
+import '../../../../app/theme/mail_theme.dart';
 import '../../domain/entities/mail_attachment.dart';
 import '../../domain/entities/outbox_message.dart';
 import '../../domain/entities/unified_email.dart';
@@ -90,7 +91,6 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
     final emailAsync = ref.watch(emailByIdProvider(id));
     final detail = ref.watch(emailDetailProvider);
     final notifier = ref.read(emailDetailProvider.notifier);
-    final email = emailAsync.value;
 
     final content = emailAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -107,7 +107,7 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
 
     if (widget.embedded) return content;
     return Scaffold(
-      appBar: AppBar(title: Text(email?.subject ?? '邮件详情')),
+      appBar: AppBar(title: const Text('邮件详情')),
       body: SafeArea(child: content),
     );
   }
@@ -123,172 +123,184 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
     return SingleChildScrollView(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _HeaderCard(
-            email: email,
-            expanded: _headerExpanded,
-            onToggle: () => setState(() => _headerExpanded = !_headerExpanded),
-          ),
-          if (verificationCode != null) ...[
-            const SizedBox(height: 12),
-            _VerificationCodeCard(
-              code: verificationCode,
-              onCopy: () => _copyVerificationCode(
-                emailLocalId: email.localId,
-                code: verificationCode,
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 6,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              OutlinedButton.icon(
-                key: const Key('reply-mail'),
-                onPressed: () => _openCompose(ComposeMode.reply, email),
-                icon: const Icon(Icons.reply, size: 16),
-                label: const Text('回复'),
+              _HeaderCard(
+                email: email,
+                expanded: _headerExpanded,
+                onToggle: () =>
+                    setState(() => _headerExpanded = !_headerExpanded),
               ),
-              OutlinedButton.icon(
-                key: const Key('reply-all-mail'),
-                onPressed: () => _openCompose(ComposeMode.replyAll, email),
-                icon: const Icon(Icons.reply_all, size: 16),
-                label: const Text('全部回复'),
-              ),
-              OutlinedButton.icon(
-                key: const Key('forward-mail'),
-                onPressed: () => _openCompose(ComposeMode.forward, email),
-                icon: const Icon(Icons.forward, size: 16),
-                label: const Text('转发'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          LayoutBuilder(
-            builder: (context, constraints) => Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                if (hasHtml)
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: constraints.maxWidth),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: SegmentedButton<EmailBodyViewMode>(
-                        key: const Key('email-view-mode'),
-                        showSelectedIcon: false,
-                        style: const ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        segments: const [
-                          ButtonSegment(
-                            value: EmailBodyViewMode.html,
-                            label: Text('HTML'),
-                            icon: Icon(Icons.html, size: 16),
-                          ),
-                          ButtonSegment(
-                            value: EmailBodyViewMode.plain,
-                            label: Text('纯文本'),
-                            icon: Icon(Icons.text_snippet_outlined, size: 16),
-                          ),
-                        ],
-                        selected: {detail.viewMode},
-                        onSelectionChanged: (value) =>
-                            notifier.setViewMode(value.first),
-                      ),
-                    ),
+              if (verificationCode != null) ...[
+                const SizedBox(height: 12),
+                _VerificationCodeCard(
+                  code: verificationCode,
+                  onCopy: () => _copyVerificationCode(
+                    emailLocalId: email.localId,
+                    code: verificationCode,
                   ),
-                if (detail.isLoadingAttachments)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                ),
               ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (email.attachments.any(
-                (attachment) =>
-                    attachment.isInline && attachment.contentId != null,
-              ) &&
-              detail.cidLocalPaths.length <
-                  email.attachments
-                      .where(
-                        (attachment) =>
-                            attachment.isInline && attachment.contentId != null,
-                      )
-                      .length)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                key: const Key('load-inline-images'),
-                onPressed: detail.isLoadingAttachments
-                    ? null
-                    : notifier.downloadInlineAttachments,
-                icon: const Icon(Icons.image_outlined, size: 16),
-                label: const Text('加载内嵌图片'),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 6,
+                children: [
+                  OutlinedButton.icon(
+                    key: const Key('reply-mail'),
+                    onPressed: () => _openCompose(ComposeMode.reply, email),
+                    icon: const Icon(Icons.reply, size: 16),
+                    label: const Text('回复'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('reply-all-mail'),
+                    onPressed: () => _openCompose(ComposeMode.replyAll, email),
+                    icon: const Icon(Icons.reply_all, size: 16),
+                    label: const Text('全部回复'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('forward-mail'),
+                    onPressed: () => _openCompose(ComposeMode.forward, email),
+                    icon: const Icon(Icons.forward, size: 16),
+                    label: const Text('转发'),
+                  ),
+                ],
               ),
-            ),
-          if (detail.errorMessage != null)
-            Container(
-              padding: const EdgeInsets.all(10),
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                detail.errorMessage!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onErrorContainer,
+              const SizedBox(height: 8),
+              LayoutBuilder(
+                builder: (context, constraints) => Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (hasHtml)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: constraints.maxWidth,
+                        ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SegmentedButton<EmailBodyViewMode>(
+                            key: const Key('email-view-mode'),
+                            showSelectedIcon: false,
+                            style: const ButtonStyle(
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            segments: const [
+                              ButtonSegment(
+                                value: EmailBodyViewMode.html,
+                                label: Text('HTML'),
+                                icon: Icon(Icons.html, size: 16),
+                              ),
+                              ButtonSegment(
+                                value: EmailBodyViewMode.plain,
+                                label: Text('纯文本'),
+                                icon: Icon(
+                                  Icons.text_snippet_outlined,
+                                  size: 16,
+                                ),
+                              ),
+                            ],
+                            selected: {detail.viewMode},
+                            onSelectionChanged: (value) =>
+                                notifier.setViewMode(value.first),
+                          ),
+                        ),
+                      ),
+                    if (detail.isLoadingAttachments)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                  ],
                 ),
               ),
-            ),
-          if (detail.isLoadingBody && !email.bodyDownloaded)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (hasHtml && detail.viewMode == EmailBodyViewMode.html)
-            SafeHtmlEmailView(
-              // A new message must never inherit the previous message's
-              // renderer choice, link state or native WebView content.
-              key: ValueKey<String>(
-                'email-html-${email.localId ?? email.subject}',
-              ),
-              html: email.htmlBody!,
-              senderEmail: email.fromAddress,
-              allowRemoteImages: detail.allowRemoteImages,
-              trustedSender: detail.trustedSender,
-              cidToLocalPath: detail.cidLocalPaths,
-              onShowRemoteImages: notifier.allowRemoteImagesOnce,
-              onTrustSender: () =>
-                  unawaited(notifier.trustSender(email.fromAddress)),
-            )
-          else
-            SelectableText(
-              (email.plainBody ?? email.snippet).trim().isEmpty
-                  ? '(无正文)'
-                  : (email.plainBody ?? email.snippet),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          if (email.attachments.where((a) => !a.isInline).isNotEmpty) ...[
-            const SizedBox(height: 18),
-            Text('附件', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 6),
-            for (final attachment in email.attachments.where(
-              (a) => !a.isInline,
-            ))
-              _AttachmentTile(
-                attachment: attachment,
-                onTap: () => unawaited(_openAttachment(email, attachment)),
-              ),
-          ],
-        ],
+              const SizedBox(height: 10),
+              if (email.attachments.any(
+                    (attachment) =>
+                        attachment.isInline && attachment.contentId != null,
+                  ) &&
+                  detail.cidLocalPaths.length <
+                      email.attachments
+                          .where(
+                            (attachment) =>
+                                attachment.isInline &&
+                                attachment.contentId != null,
+                          )
+                          .length)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const Key('load-inline-images'),
+                    onPressed: detail.isLoadingAttachments
+                        ? null
+                        : notifier.downloadInlineAttachments,
+                    icon: const Icon(Icons.image_outlined, size: 16),
+                    label: const Text('加载内嵌图片'),
+                  ),
+                ),
+              if (detail.errorMessage != null)
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    detail.errorMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ),
+              if (detail.isLoadingBody && !email.bodyDownloaded)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (hasHtml && detail.viewMode == EmailBodyViewMode.html)
+                SafeHtmlEmailView(
+                  // A new message must never inherit the previous message's
+                  // renderer choice, link state or native WebView content.
+                  key: ValueKey<String>(
+                    'email-html-${email.localId ?? email.subject}',
+                  ),
+                  html: email.htmlBody!,
+                  senderEmail: email.fromAddress,
+                  allowRemoteImages: detail.allowRemoteImages,
+                  trustedSender: detail.trustedSender,
+                  cidToLocalPath: detail.cidLocalPaths,
+                  onShowRemoteImages: notifier.allowRemoteImagesOnce,
+                  onTrustSender: () =>
+                      unawaited(notifier.trustSender(email.fromAddress)),
+                )
+              else
+                SelectableText(
+                  (email.plainBody ?? email.snippet).trim().isEmpty
+                      ? '(无正文)'
+                      : (email.plainBody ?? email.snippet),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              if (email.attachments.where((a) => !a.isInline).isNotEmpty) ...[
+                const SizedBox(height: 18),
+                Text('附件', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 6),
+                for (final attachment in email.attachments.where(
+                  (a) => !a.isInline,
+                ))
+                  _AttachmentTile(
+                    attachment: attachment,
+                    onTap: () => unawaited(_openAttachment(email, attachment)),
+                  ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -410,34 +422,41 @@ class _HeaderCard extends StatelessWidget {
     return Card(
       child: InkWell(
         onTap: onToggle,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(MailShapes.card),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Text(
                       email.subject.isEmpty ? '(无主题)' : email.subject,
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: Theme.of(context).textTheme.headlineSmall,
                     ),
                   ),
-                  Icon(expanded ? Icons.expand_less : Icons.expand_more),
+                  const SizedBox(width: 8),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    color: MailColors.muted(context),
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(
                 email.fromName.isEmpty
                     ? email.fromAddress
                     : '${email.fromName} <${email.fromAddress}>',
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 4),
               Text(
                 DateFormat('yyyy-MM-dd HH:mm').format(email.sentAt.toLocal()),
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: MailColors.muted(context)),
               ),
               if (expanded) ...[
                 const Divider(height: 20),

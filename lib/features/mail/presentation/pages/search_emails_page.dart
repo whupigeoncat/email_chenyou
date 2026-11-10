@@ -68,7 +68,6 @@ class _SearchEmailsPageState extends ConsumerState<SearchEmailsPage> {
                 decoration: const InputDecoration(
                   labelText: '账户筛选',
                   isDense: true,
-                  border: OutlineInputBorder(),
                 ),
                 items: [
                   const DropdownMenuItem<String?>(
