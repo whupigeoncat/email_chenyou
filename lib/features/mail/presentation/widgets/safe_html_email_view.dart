@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show Factory;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -8,6 +9,30 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'html_email_sanitizer.dart';
+
+/// Block-level containers that must never force the reader wider than the
+/// available width because an email author used a fixed pixel width.
+const Set<String> _constrainedBlockTags = <String>{
+  'div',
+  'section',
+  'article',
+  'main',
+  'header',
+  'footer',
+  'center',
+  'blockquote',
+  'p',
+  'pre',
+  'ul',
+  'ol',
+  'dl',
+  'dd',
+  'figure',
+  'address',
+  'aside',
+  'nav',
+  'form',
+};
 
 /// Injectable advanced renderer used by widget tests to avoid a native WebView.
 typedef SafeWebViewBuilder = Widget Function(
@@ -47,6 +72,47 @@ class SafeHtmlEmailView extends StatefulWidget {
   final Future<bool> Function(String url)? onOpenLink;
   final bool autoUseWebViewForComplexTables;
 
+  /// Finite frame height for the native advanced renderer.
+  ///
+  /// The widget is commonly placed inside a parent `SingleChildScrollView`,
+  /// which gives it an unbounded height. A native WebView must be given a
+  /// bounded box so its own scrolling can work; this returns a stable,
+  /// viewport-relative height that stays usable on small phones.
+  @visibleForTesting
+  static double webViewHeightFor(Size viewport) {
+    final height = viewport.height;
+    if (!height.isFinite || height <= 0) return 480;
+    // Short landscape windows still get a usable but not full-screen box.
+    return (height * 0.62).clamp(200.0, 720.0);
+  }
+
+  /// Content identity for the native renderer. Changing HTML (for example
+  /// after remote-image consent or switching messages) must recreate the
+  /// WebView because `initialData` is only applied at creation time.
+  @visibleForTesting
+  static String contentSignature(String html) {
+    var hash = 0x811c9dc5;
+    for (final unit in html.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x01000193) & 0xFFFFFFFF;
+    }
+    return '${html.length}:$hash';
+  }
+
+  /// Gives the native platform view the gesture directly.
+  ///
+  /// The reader is embedded in a parent scroll view. Without an eager
+  /// recognizer the parent's vertical drag can win the gesture arena and the
+  /// WebView never receives the touch, so long email bodies cannot be
+  /// scrolled even though the frame has a finite height.
+  @visibleForTesting
+  static Set<Factory<OneSequenceGestureRecognizer>>
+  buildWebViewGestureRecognizers() {
+    return <Factory<OneSequenceGestureRecognizer>>{
+      Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+    };
+  }
+
   /// Test-visible production WebView baseline.
   @visibleForTesting
   static InAppWebViewSettings buildWebViewSettings() {
@@ -55,12 +121,17 @@ class SafeHtmlEmailView extends StatefulWidget {
       javaScriptCanOpenWindowsAutomatically: false,
       allowsInlineMediaPlayback: false,
       mediaPlaybackRequiresUserGesture: true,
-      supportZoom: false,
+      // Pinch zoom is a native, script-free escape hatch for wide tables.
+      supportZoom: true,
+      // Required by the plugin for `shouldOverrideUrlLoading` to fire.
+      useShouldOverrideUrlLoading: true,
       allowFileAccess: true,
       allowContentAccess: false,
       allowFileAccessFromFileURLs: false,
       allowUniversalAccessFromFileURLs: false,
       disableContextMenu: true,
+      verticalScrollBarEnabled: true,
+      horizontalScrollBarEnabled: true,
     );
   }
 
@@ -69,16 +140,35 @@ class SafeHtmlEmailView extends StatefulWidget {
   static String buildCspDocument(
     String body, {
     required bool allowRemoteImages,
+    String? backgroundColor,
+    String? textColor,
   }) {
     final imageSources = allowRemoteImages
         ? "img-src 'self' data: file: http: https:;"
         : "img-src 'self' data: file:;";
+    final canvas = <String>[
+      if (backgroundColor != null) 'background-color:$backgroundColor;',
+      if (textColor != null) 'color:$textColor;',
+    ].join();
     return '<!doctype html><html><head><meta charset="utf-8">'
+        '<meta name="viewport" '
+        'content="width=device-width, initial-scale=1">'
         '<meta http-equiv="Content-Security-Policy" '
         'content="default-src \'none\'; script-src \'none\'; '
         'object-src \'none\'; frame-src \'none\'; base-uri \'none\'; '
         'form-action \'none\'; $imageSources '
-        'style-src \'unsafe-inline\';"></head><body>$body</body></html>';
+        'style-src \'unsafe-inline\';"></head><body style="$canvas">'
+        '<style>*{box-sizing:border-box;}'
+        'html,body{margin:0;padding:0;}'
+        'body{padding:12px;overflow-x:auto;overflow-wrap:anywhere;'
+        'word-break:break-word;}'
+        'div,section,article,main,header,footer,center,blockquote,p,pre,ul,'
+        'ol,dl,dd,figure,address,aside,nav,form{max-width:100%;}'
+        'img{max-width:100%;height:auto;}'
+        'table{border-collapse:collapse;max-width:100%;}'
+        'td,th{word-break:break-word;overflow-wrap:anywhere;}'
+        'pre{white-space:pre-wrap;overflow-wrap:anywhere;}</style>'
+        '$body</body></html>';
   }
 
   /// Test-visible navigation policy. The callback always runs and the WebView
@@ -105,8 +195,19 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
   bool? _webViewOverride;
   Map<String, List<String>> _visibleLinkTexts = const {};
 
-  bool get _allowRemote =>
-      widget.allowRemoteImages || widget.trustedSender;
+  bool get _allowRemote => widget.allowRemoteImages || widget.trustedSender;
+
+  @override
+  void didUpdateWidget(covariant SafeHtmlEmailView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Never let a manual renderer choice leak into another message. The
+    // detail page also keys this widget by message id; this is the second
+    // line of defence for callers that reuse the state.
+    if (oldWidget.html != widget.html ||
+        oldWidget.senderEmail != widget.senderEmail) {
+      _webViewOverride = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,9 +221,11 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
     final complex =
         widget.autoUseWebViewForComplexTables && _isComplex(result.html);
     final useWebView = _webViewOverride ?? complex;
+    final palette = _resolveReadingPalette(context, result);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         if (result.blockedRemoteContent > 0 && !_allowRemote)
           _RemoteContentBanner(
@@ -130,21 +233,22 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
             onShowImages: widget.onShowRemoteImages,
             onTrustSender: widget.onTrustSender,
           ),
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
           children: [
             if (complex || _webViewOverride != null)
               TextButton.icon(
                 key: const Key('toggle-secure-webview'),
-                onPressed: () => setState(
-                  () => _webViewOverride = !useWebView,
-                ),
+                onPressed: () => setState(() => _webViewOverride = !useWebView),
                 icon: Icon(
                   useWebView ? Icons.article_outlined : Icons.web_outlined,
                   size: 16,
                 ),
                 label: Text(useWebView ? '切回安全阅读视图' : '高级表格视图'),
               ),
-            const Spacer(),
             if (result.hasRemoteContent)
               Text(
                 '远程内容：${result.remoteImageCount + result.remoteCssCount}',
@@ -153,42 +257,178 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
           ],
         ),
         if (useWebView)
-          (widget.webViewBuilder ?? _defaultWebView)(
-            context,
-            SafeHtmlEmailView.buildCspDocument(
-              result.html,
-              allowRemoteImages: _allowRemote,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              key: const Key('safe-webview-frame'),
+              height: SafeHtmlEmailView.webViewHeightFor(
+                MediaQuery.sizeOf(context),
+              ),
+              child: (widget.webViewBuilder ?? _defaultWebView)(
+                context,
+                SafeHtmlEmailView.buildCspDocument(
+                  result.html,
+                  allowRemoteImages: _allowRemote,
+                  // Native must use the same reading surface as Flutter.
+                  // Without this, a dark app + white body text would fall back
+                  // to the WebView's white default and become unreadable.
+                  backgroundColor: _cssColorOf(
+                    palette.background ?? Theme.of(context).colorScheme.surface,
+                  ),
+                  textColor: _cssColorOf(
+                    palette.foreground ??
+                        Theme.of(context).textTheme.bodyMedium?.color ??
+                        Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                _confirmAndOpenLink,
+              ),
             ),
-            _confirmAndOpenLink,
           )
         else
-          HtmlWidget(
-            result.html,
-            key: const Key('safe-html-widget'),
-            textStyle: Theme.of(context).textTheme.bodyMedium,
-            factoryBuilder: () => _SafeLinkWidgetFactory(
-              onOpen: (url, text) {
+          Container(
+            key: const Key('safe-html-canvas'),
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: palette.background,
+              borderRadius: BorderRadius.circular(12),
+              border: palette.background == null
+                  ? null
+                  : Border.all(
+                      color: Theme.of(context).colorScheme.outlineVariant
+                          .withValues(alpha: 0.5),
+                    ),
+            ),
+            child: HtmlWidget(
+              result.html,
+              key: const Key('safe-html-widget'),
+              textStyle:
+                  (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+                      .copyWith(color: palette.foreground),
+              // Email templates commonly set a fixed pixel width (for example
+              // a 680px wrapper). Cap block containers so ordinary paragraphs
+              // are not forced to scroll sideways just because one table is
+              // wide; tables and images keep their own horizontal fallback.
+              customStylesBuilder: (element) {
+                final tag = element.localName?.toLowerCase();
+                if (tag == null) return null;
+                if (_constrainedBlockTags.contains(tag)) {
+                  return const <String, String>{
+                    'max-width': '100%',
+                    'box-sizing': 'border-box',
+                  };
+                }
+                if (tag == 'table' || tag == 'img') {
+                  return const <String, String>{'max-width': '100%'};
+                }
+                return null;
+              },
+              factoryBuilder: () => _SafeLinkWidgetFactory(
+                onOpen: (url, text) {
+                  unawaited(_confirmAndOpenLink(url, displayText: text));
+                },
+              ),
+              onTapUrl: (url) {
+                if (url.startsWith('#')) return false;
+                final texts = _visibleLinkTexts[url];
                 unawaited(
-                  _confirmAndOpenLink(url, displayText: text),
+                  _confirmAndOpenLink(
+                    url,
+                    displayText: texts != null && texts.isNotEmpty
+                        ? texts.first
+                        : null,
+                  ),
                 );
+                return true;
               },
             ),
-            onTapUrl: (url) {
-              if (url.startsWith('#')) return false;
-              final texts = _visibleLinkTexts[url];
-              unawaited(
-                _confirmAndOpenLink(
-                  url,
-                  displayText: texts != null && texts.isNotEmpty
-                      ? texts.first
-                      : null,
-                ),
-              );
-              return true;
-            },
           ),
       ],
     );
+  }
+
+  /// Resolves an email-local reading canvas. Explicit email colors win; when
+  /// the email declares dark text but no background (common in HTML mail) a
+  /// light canvas is used instead of forcing a global inversion.
+  _ReadingPalette _resolveReadingPalette(
+    BuildContext context,
+    HtmlSanitizeResult result,
+  ) {
+    final theme = Theme.of(context);
+    // The transparent Flutter canvas shows the Scaffold surface, so contrast
+    // decisions use that same surface the native fallback paints.
+    final surface = theme.colorScheme.surface;
+    final rawBackground = _parseColor(result.backgroundColor);
+    // A translucent email background must be composited over the app surface
+    // before luminance/contrast decisions, and the same opaque canvas is sent
+    // to the native renderer. Fully transparent colors are already `null`.
+    final declaredBackground = rawBackground == null || rawBackground.a >= 1
+        ? rawBackground
+        : Color.alphaBlend(rawBackground, surface);
+    final rawText = _parseColor(result.textColor);
+    final declaredText = rawText == null || rawText.a >= 1
+        ? rawText
+        : Color.alphaBlend(rawText, declaredBackground ?? surface);
+    final rawProbe = _parseColor(result.firstTextColor);
+    final probeText = rawProbe == null || rawProbe.a >= 1
+        ? rawProbe
+        : Color.alphaBlend(rawProbe, surface);
+
+    if (declaredBackground != null) {
+      var foreground = declaredText;
+      if (foreground == null ||
+          _contrastRatio(foreground, declaredBackground) < 4.5) {
+        foreground = _contrastColorFor(declaredBackground);
+      }
+      return _ReadingPalette(
+        background: declaredBackground,
+        foreground: foreground,
+      );
+    }
+
+    if (probeText != null && _contrastRatio(probeText, surface) < 4.5) {
+      final canvas = _isLight(probeText) ? Colors.black : Colors.white;
+      return _ReadingPalette(
+        background: canvas,
+        foreground: _contrastColorFor(canvas),
+      );
+    }
+
+    return _ReadingPalette(background: null, foreground: declaredText);
+  }
+
+  static Color? _parseColor(String? cssColor) {
+    final argb = HtmlEmailSanitizer.parseCssColor(cssColor);
+    // Fully transparent colors mean "no declared canvas"; treating them as
+    // black would make contrast decisions wrong.
+    if (argb == null || ((argb >> 24) & 0xFF) == 0) return null;
+    return Color(argb);
+  }
+
+  static bool _isLight(Color color) => color.computeLuminance() > 0.5;
+
+  static Color _contrastColorFor(Color background) =>
+      _isLight(background) ? const Color(0xFF1B1B1B) : const Color(0xFFF4F4F4);
+
+  static double _contrastRatio(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final lighter = la > lb ? la : lb;
+    final darker = la > lb ? lb : la;
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  static String? _cssColorOf(Color? color) {
+    if (color == null) return null;
+    final argb = color.toARGB32();
+    final rgb = (argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0');
+    final alpha = (argb >> 24) & 0xFF;
+    if (alpha == 255) return '#$rgb';
+    final red = (argb >> 16) & 0xFF;
+    final green = (argb >> 8) & 0xFF;
+    final blue = argb & 0xFF;
+    return 'rgba($red,$green,$blue,${(alpha / 255).toStringAsFixed(3)})';
   }
 
   Widget _defaultWebView(
@@ -197,7 +437,12 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
     Future<bool> Function(String url) onOpenLink,
   ) {
     return InAppWebView(
-      key: const Key('safe-inapp-webview'),
+      // `initialData` is only read when the native view is created, so the
+      // key includes the content signature. Consent changes and message
+      // switches then replace the native content and reset scroll position.
+      key: ValueKey(
+        'safe-inapp-webview-${SafeHtmlEmailView.contentSignature(html)}',
+      ),
       initialData: InAppWebViewInitialData(
         data: html,
         mimeType: 'text/html',
@@ -205,6 +450,7 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
         baseUrl: WebUri('about:blank'),
       ),
       initialSettings: SafeHtmlEmailView.buildWebViewSettings(),
+      gestureRecognizers: SafeHtmlEmailView.buildWebViewGestureRecognizers(),
       shouldOverrideUrlLoading: (controller, action) {
         return SafeHtmlEmailView.handleNavigation(
           url: action.request.url?.toString(),
@@ -235,11 +481,9 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
         RegExp('colspan|rowspan', caseSensitive: false).hasMatch(html);
   }
 
-  Future<bool> _confirmAndOpenLink(
-    String rawUrl, {
-    String? displayText,
-  }) async {
-    final effectiveDisplayText = displayText ??
+  Future<bool> _confirmAndOpenLink(String rawUrl, {String? displayText}) async {
+    final effectiveDisplayText =
+        displayText ??
         (_visibleLinkTexts[rawUrl] != null &&
                 _visibleLinkTexts[rawUrl]!.isNotEmpty
             ? _visibleLinkTexts[rawUrl]!.first
@@ -363,28 +607,58 @@ class _RemoteContentBanner extends StatelessWidget {
         color: Theme.of(context).colorScheme.tertiaryContainer,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.visibility_off_outlined, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '已拦截 $blockedCount 个远程图片/样式请求，防止追踪像素。',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 1),
+                child: Icon(Icons.visibility_off_outlined, size: 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '已拦截 $blockedCount 个远程图片/样式请求，防止追踪像素。',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
           ),
-          TextButton(
-            key: const Key('show-remote-images'),
-            onPressed: onShowImages,
-            child: const Text('显示图片'),
-          ),
-          TextButton(
-            key: const Key('trust-sender'),
-            onPressed: onTrustSender,
-            child: const Text('信任发件人'),
+          const SizedBox(height: 2),
+          Wrap(
+            spacing: 4,
+            runSpacing: 2,
+            children: [
+              TextButton(
+                key: const Key('show-remote-images'),
+                onPressed: onShowImages,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('显示图片'),
+              ),
+              TextButton(
+                key: const Key('trust-sender'),
+                onPressed: onTrustSender,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('信任发件人'),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+}
+
+class _ReadingPalette {
+  const _ReadingPalette({required this.background, required this.foreground});
+
+  final Color? background;
+  final Color? foreground;
 }

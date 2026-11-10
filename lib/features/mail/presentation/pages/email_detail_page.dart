@@ -15,11 +15,7 @@ import '../widgets/safe_html_email_view.dart';
 import 'compose_email_page.dart';
 
 class EmailDetailPage extends ConsumerStatefulWidget {
-  const EmailDetailPage({
-    super.key,
-    this.emailLocalId,
-    this.embedded = false,
-  });
+  const EmailDetailPage({super.key, this.emailLocalId, this.embedded = false});
 
   final int? emailLocalId;
   final bool embedded;
@@ -29,6 +25,7 @@ class EmailDetailPage extends ConsumerStatefulWidget {
 }
 
 class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
+  final ScrollController _scrollController = ScrollController();
   bool _headerExpanded = false;
 
   @override
@@ -41,14 +38,32 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
   void didUpdateWidget(covariant EmailDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.emailLocalId != widget.emailLocalId) {
+      _headerExpanded = false;
+      _scrollToTopAfterFrame();
       _openCurrent();
     }
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _openCurrent() {
+    final localId = widget.emailLocalId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ref.read(emailDetailProvider.notifier).open(widget.emailLocalId);
+      // Do not let a queued open from message A run after the page switched
+      // to message B.
+      if (!mounted || widget.emailLocalId != localId) return;
+      ref.read(emailDetailProvider.notifier).open(localId);
+    });
+  }
+
+  void _scrollToTopAfterFrame() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.jumpTo(0);
     });
   }
 
@@ -69,10 +84,7 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
       error: (error, stackTrace) => Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
-            '加载邮件失败：$error',
-            textAlign: TextAlign.center,
-          ),
+          child: Text('加载邮件失败：$error', textAlign: TextAlign.center),
         ),
       ),
       data: (email) => email == null
@@ -95,6 +107,7 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
   ) {
     final hasHtml = email.htmlBody != null && email.htmlBody!.trim().isNotEmpty;
     return SingleChildScrollView(
+      controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -129,47 +142,60 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              if (hasHtml)
-                SegmentedButton<EmailBodyViewMode>(
-                  key: const Key('email-view-mode'),
-                  segments: const [
-                    ButtonSegment(
-                      value: EmailBodyViewMode.html,
-                      label: Text('HTML'),
-                      icon: Icon(Icons.html, size: 16),
+          LayoutBuilder(
+            builder: (context, constraints) => Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (hasHtml)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SegmentedButton<EmailBodyViewMode>(
+                        key: const Key('email-view-mode'),
+                        showSelectedIcon: false,
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        segments: const [
+                          ButtonSegment(
+                            value: EmailBodyViewMode.html,
+                            label: Text('HTML'),
+                            icon: Icon(Icons.html, size: 16),
+                          ),
+                          ButtonSegment(
+                            value: EmailBodyViewMode.plain,
+                            label: Text('纯文本'),
+                            icon: Icon(Icons.text_snippet_outlined, size: 16),
+                          ),
+                        ],
+                        selected: {detail.viewMode},
+                        onSelectionChanged: (value) =>
+                            notifier.setViewMode(value.first),
+                      ),
                     ),
-                    ButtonSegment(
-                      value: EmailBodyViewMode.plain,
-                      label: Text('纯文本'),
-                      icon: Icon(Icons.text_snippet_outlined, size: 16),
-                    ),
-                  ],
-                  selected: {detail.viewMode},
-                  onSelectionChanged: (value) =>
-                      notifier.setViewMode(value.first),
-                ),
-              const Spacer(),
-              if (detail.isLoadingAttachments)
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
+                  ),
+                if (detail.isLoadingAttachments)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           if (email.attachments.any(
-            (attachment) =>
-                attachment.isInline && attachment.contentId != null,
-          ) &&
+                (attachment) =>
+                    attachment.isInline && attachment.contentId != null,
+              ) &&
               detail.cidLocalPaths.length <
                   email.attachments
                       .where(
                         (attachment) =>
-                            attachment.isInline &&
-                            attachment.contentId != null,
+                            attachment.isInline && attachment.contentId != null,
                       )
                       .length)
             Align(
@@ -205,15 +231,19 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
             )
           else if (hasHtml && detail.viewMode == EmailBodyViewMode.html)
             SafeHtmlEmailView(
+              // A new message must never inherit the previous message's
+              // renderer choice, link state or native WebView content.
+              key: ValueKey<String>(
+                'email-html-${email.localId ?? email.subject}',
+              ),
               html: email.htmlBody!,
               senderEmail: email.fromAddress,
               allowRemoteImages: detail.allowRemoteImages,
               trustedSender: detail.trustedSender,
               cidToLocalPath: detail.cidLocalPaths,
               onShowRemoteImages: notifier.allowRemoteImagesOnce,
-              onTrustSender: () => unawaited(
-                notifier.trustSender(email.fromAddress),
-              ),
+              onTrustSender: () =>
+                  unawaited(notifier.trustSender(email.fromAddress)),
             )
           else
             SelectableText(
@@ -226,8 +256,9 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
             const SizedBox(height: 18),
             Text('附件', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 6),
-            for (final attachment
-                in email.attachments.where((a) => !a.isInline))
+            for (final attachment in email.attachments.where(
+              (a) => !a.isInline,
+            ))
               _AttachmentTile(
                 attachment: attachment,
                 onTap: () => unawaited(_openAttachment(email, attachment)),
@@ -281,7 +312,10 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
   Widget _empty(BuildContext context, {required bool embedded}) {
     final body = const Center(child: Text('选择一封邮件开始阅读'));
     if (embedded) return body;
-    return Scaffold(appBar: AppBar(title: const Text('邮件详情')), body: body);
+    return Scaffold(
+      appBar: AppBar(title: const Text('邮件详情')),
+      body: body,
+    );
   }
 }
 
@@ -385,7 +419,7 @@ class _AttachmentTile extends StatelessWidget {
         ),
         title: Text(
           attachment.filename,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(

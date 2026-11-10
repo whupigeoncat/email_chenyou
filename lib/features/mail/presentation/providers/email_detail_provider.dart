@@ -57,8 +57,7 @@ class EmailDetailState {
       allowRemoteImages: allowRemoteImages ?? this.allowRemoteImages,
       trustedSender: trustedSender ?? this.trustedSender,
       isLoadingBody: isLoadingBody ?? this.isLoadingBody,
-      isLoadingAttachments:
-          isLoadingAttachments ?? this.isLoadingAttachments,
+      isLoadingAttachments: isLoadingAttachments ?? this.isLoadingAttachments,
       cidLocalPaths: cidLocalPaths ?? this.cidLocalPaths,
       viewMode: viewMode ?? this.viewMode,
       errorMessage: identical(errorMessage, _unset)
@@ -95,25 +94,30 @@ class EmailDetail extends _$EmailDetail {
   }
 
   void resetRemoteImagePermission() {
-    state = state.copyWith(
-      allowRemoteImages: false,
-      errorMessage: null,
-    );
+    state = state.copyWith(allowRemoteImages: false, errorMessage: null);
   }
 
   Future<void> trustSender(String senderEmail) async {
     if (senderEmail.trim().isEmpty) return;
+    final localId = state.emailLocalId;
     try {
-      await ref
-          .read(trustedSendersRepositoryProvider)
-          .trustSender(senderEmail);
-      if (!ref.mounted) return;
+      await ref.read(trustedSendersRepositoryProvider).trustSender(senderEmail);
+      // The user may have switched messages while the trust write was in
+      // flight. Only the message that initiated the action may become
+      // trusted; otherwise A's permission would leak into B.
+      if (!ref.mounted || localId == null || state.emailLocalId != localId) {
+        return;
+      }
       state = state.copyWith(trustedSender: true, allowRemoteImages: true);
     } on AppFailure catch (failure) {
-      if (!ref.mounted) return;
+      if (!ref.mounted || localId == null || state.emailLocalId != localId) {
+        return;
+      }
       state = state.copyWith(errorMessage: failure.userMessage);
     } catch (error) {
-      if (!ref.mounted) return;
+      if (!ref.mounted || localId == null || state.emailLocalId != localId) {
+        return;
+      }
       state = state.copyWith(errorMessage: '保存信任发件人失败：$error');
     }
   }
@@ -137,8 +141,8 @@ class EmailDetail extends _$EmailDetail {
     try {
       final local = ref.read(mailLocalRepositoryProvider);
       final email = await local.getEmail(localId);
+      if (!ref.mounted || state.emailLocalId != localId) return;
       if (email == null) {
-        if (!ref.mounted) return;
         state = state.copyWith(errorMessage: '邮件已不在本地缓存中。');
         return;
       }
@@ -156,10 +160,9 @@ class EmailDetail extends _$EmailDetail {
           .read(authRepositoryProvider)
           .getAccount(email.accountId);
       if (account == null) throw StateError('账户不存在或已被删除');
-      await ref.read(fetchMessageBodyUseCaseProvider).call(
-            account: account,
-            emailLocalId: localId,
-          );
+      await ref
+          .read(fetchMessageBodyUseCaseProvider)
+          .call(account: account, emailLocalId: localId);
       if (!ref.mounted || state.emailLocalId != localId) return;
       state = state.copyWith(isLoadingBody: false, errorMessage: null);
       await _downloadInlineAttachments(localId);
@@ -221,7 +224,9 @@ class EmailDetail extends _$EmailDetail {
           continue;
         }
         try {
-          final path = await ref.read(downloadAttachmentUseCaseProvider).call(
+          final path = await ref
+              .read(downloadAttachmentUseCaseProvider)
+              .call(
                 account: account,
                 emailLocalId: localId,
                 partId: attachment.partId,
@@ -232,10 +237,7 @@ class EmailDetail extends _$EmailDetail {
         }
       }
       if (!ref.mounted || state.emailLocalId != localId) return;
-      state = state.copyWith(
-        isLoadingAttachments: false,
-        cidLocalPaths: paths,
-      );
+      state = state.copyWith(isLoadingAttachments: false, cidLocalPaths: paths);
     } finally {
       if (ref.mounted && state.emailLocalId == localId) {
         state = state.copyWith(isLoadingAttachments: false);

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 
 /// Result of applying the zero-trust HTML email policy.
@@ -9,6 +10,10 @@ class HtmlSanitizeResult {
     this.blockedRemoteImages = 0,
     this.remoteCssCount = 0,
     this.blockedRemoteCss = 0,
+    this.backgroundColor,
+    this.textColor,
+    this.firstTextColor,
+    this.direction,
   });
 
   final String html;
@@ -16,6 +21,19 @@ class HtmlSanitizeResult {
   final int blockedRemoteImages;
   final int remoteCssCount;
   final int blockedRemoteCss;
+
+  /// Sanitized `<body>` background color, when the email declares one.
+  final String? backgroundColor;
+
+  /// Sanitized `<body>` text color, when the email declares one.
+  final String? textColor;
+
+  /// First explicit text color found in the document. Used only as a
+  /// readability hint when the email has no body-level color.
+  final String? firstTextColor;
+
+  /// Sanitized body text direction: `ltr`, `rtl` or `auto`.
+  final String? direction;
 
   bool get hasRemoteContent => remoteImageCount + remoteCssCount > 0;
 
@@ -71,6 +89,40 @@ class HtmlEmailSanitizer {
     caseSensitive: false,
   );
 
+  static final RegExp _hexColor = RegExp(r'^#([0-9a-f]{3,8})$');
+  static final RegExp _rgbColor = RegExp(
+    r'^rgba?\(\s*([0-9.]+%?)\s*[, ]\s*([0-9.]+%?)\s*[, ]\s*([0-9.]+%?)'
+    r'\s*(?:[,/]\s*([0-9.]+%?)\s*)?\)$',
+    caseSensitive: false,
+  );
+  static final RegExp _anyColorToken = RegExp(
+    r'#[0-9a-f]{3,8}\b|rgba?\([^)]*\)|\b(?:aqua|black|blue|fuchsia|gray|grey|'
+    r'green|lime|maroon|navy|olive|orange|purple|red|silver|teal|white|'
+    r'yellow)\b',
+    caseSensitive: false,
+  );
+
+  static const Map<String, int> _namedColors = <String, int>{
+    'black': 0xFF000000,
+    'silver': 0xFFC0C0C0,
+    'gray': 0xFF808080,
+    'grey': 0xFF808080,
+    'white': 0xFFFFFFFF,
+    'maroon': 0xFF800000,
+    'red': 0xFFFF0000,
+    'purple': 0xFF800080,
+    'fuchsia': 0xFFFF00FF,
+    'green': 0xFF008000,
+    'lime': 0xFF00FF00,
+    'olive': 0xFF808000,
+    'yellow': 0xFFFFFF00,
+    'navy': 0xFF000080,
+    'blue': 0xFF0000FF,
+    'teal': 0xFF008080,
+    'aqua': 0xFF00FFFF,
+    'orange': 0xFFFFA500,
+  };
+
   /// Normalizes URL-ish text before any security decision.
   ///
   /// Removes ASCII controls including spaces/DEL and converts every backslash
@@ -114,7 +166,12 @@ class HtmlEmailSanitizer {
       element.remove();
     }
 
-    for (final element in root.querySelectorAll('*')) {
+    final elements = <dom.Element>[
+      root,
+      ...root.querySelectorAll('*').whereType<dom.Element>(),
+    ];
+
+    for (final element in elements) {
       final tag = element.localName?.toLowerCase() ?? '';
       for (final attribute in element.attributes.keys.toList()) {
         final name = attribute.toString().toLowerCase();
@@ -194,7 +251,7 @@ class HtmlEmailSanitizer {
         final sanitized = _sanitizeResourceUrl(
           value,
           allowRemote: allowRemote,
-          allowDataImage: name == 'src',
+          allowDataImage: name == 'src' || name == 'background',
           onRemote: () => remoteImageCount++,
           onBlocked: () => blockedRemoteImages++,
           cidToLocalPath: cidToLocalPath,
@@ -211,13 +268,262 @@ class HtmlEmailSanitizer {
       }
     }
 
+    // The body element itself is sanitized above, but its background, text
+    // color and direction are otherwise lost when only `body.innerHtml` is
+    // rendered. Re-emit them on a wrapper so the email keeps its original
+    // reading canvas without restoring arbitrary head CSS.
+    final bodyElement = body is dom.Element ? body : null;
+    final presentation = bodyElement == null
+        ? const _BodyPresentation()
+        : _readBodyPresentation(bodyElement);
+    // The reader paints the solid body color on its canvas (compositing any
+    // alpha), so only non-solid decoration stays on the wrapper. Emitting the
+    // background color here as well would blend a translucent color twice.
+    final wrapperStyle = <String>[
+      if (presentation.backgroundImage != null)
+        'background-image:url("${_escapeCssUrl(presentation.backgroundImage!)}")',
+    ];
+    final inner = body?.innerHtml ?? document.documentElement?.outerHtml ?? '';
+    String wrapped;
+    if (wrapperStyle.isEmpty && presentation.direction == null) {
+      wrapped = inner;
+    } else {
+      // Serialize through the DOM instead of interpolating attribute strings.
+      // The HTML serializer owns attribute escaping, so malformed quotes in an
+      // email-supplied URL cannot break out of `style` or inject attributes.
+      final wrapper = dom.Element.tag('div');
+      if (presentation.direction != null) {
+        wrapper.attributes['dir'] = presentation.direction!;
+      }
+      if (wrapperStyle.isNotEmpty) {
+        wrapper.attributes['style'] = wrapperStyle.join(';');
+      }
+      wrapper.innerHtml = inner;
+      wrapped = wrapper.outerHtml;
+    }
+
     return HtmlSanitizeResult(
-      html: body?.innerHtml ?? document.documentElement?.outerHtml ?? '',
+      html: wrapped,
       remoteImageCount: remoteImageCount,
       blockedRemoteImages: blockedRemoteImages,
       remoteCssCount: remoteCssCount,
       blockedRemoteCss: blockedRemoteCss,
+      backgroundColor: presentation.backgroundColor,
+      textColor: presentation.textColor,
+      firstTextColor:
+          _firstDeclaredTextColor(elements) ?? presentation.textColor,
+      direction: presentation.direction,
     );
+  }
+
+  /// Parses a narrow, CSS-color-only syntax into an ARGB integer.
+  ///
+  /// Values outside the recognized color grammar return `null`; this is used
+  /// to validate body colors before they are put back into rendered HTML.
+  static int? parseCssColor(String? input) {
+    if (input == null) return null;
+    final value = input.trim().toLowerCase();
+    if (value.isEmpty) return null;
+    if (value == 'transparent') return 0x00000000;
+    final named = _namedColors[value];
+    if (named != null) return named;
+
+    final hex = _hexColor.firstMatch(value);
+    if (hex != null) {
+      final digits = hex.group(1)!;
+      int channel(int index, int length) {
+        final part = digits.substring(index, index + length);
+        return length == 1
+            ? int.parse('$part$part', radix: 16)
+            : int.parse(part, radix: 16);
+      }
+
+      switch (digits.length) {
+        case 3:
+          return 0xFF000000 |
+              (channel(0, 1) << 16) |
+              (channel(1, 1) << 8) |
+              channel(2, 1);
+        case 4:
+          return (channel(3, 1) << 24) |
+              (channel(0, 1) << 16) |
+              (channel(1, 1) << 8) |
+              channel(2, 1);
+        case 6:
+          return 0xFF000000 | int.parse(digits, radix: 16);
+        case 8:
+          // CSS #RRGGBBAA ordering.
+          final rgb = int.parse(digits.substring(0, 6), radix: 16);
+          final alpha = int.parse(digits.substring(6), radix: 16);
+          return (alpha << 24) | rgb;
+      }
+    }
+
+    final rgb = _rgbColor.firstMatch(value);
+    if (rgb == null) return null;
+    int? component(String? raw, {int max = 255}) {
+      if (raw == null) return null;
+      final isPercent = raw.endsWith('%');
+      final number = double.tryParse(
+        isPercent ? raw.substring(0, raw.length - 1) : raw,
+      );
+      if (number == null || number.isNaN || number.isInfinite) return null;
+      final scaled = isPercent ? number * max / 100 : number;
+      if (scaled < 0) return null;
+      return scaled.round().clamp(0, max);
+    }
+
+    final red = component(rgb.group(1));
+    final green = component(rgb.group(2));
+    final blue = component(rgb.group(3));
+    if (red == null || green == null || blue == null) return null;
+    final alphaRaw = rgb.group(4);
+    final alpha = alphaRaw == null
+        ? 255
+        : alphaRaw.endsWith('%')
+        ? component(alphaRaw, max: 255)
+        : (double.tryParse(alphaRaw) ?? 1) * 255;
+    final alphaByte = alpha == null ? 255 : alpha.round().clamp(0, 255);
+    return (alphaByte << 24) | (red << 16) | (green << 8) | blue;
+  }
+
+  static String? _canonicalColor(String? value) {
+    final argb = parseCssColor(value);
+    if (argb == null) return null;
+    final alpha = (argb >> 24) & 0xFF;
+    if (alpha == 0) return 'transparent';
+    final rgb = (argb & 0xFFFFFF)
+        .toRadixString(16)
+        .padLeft(6, '0')
+        .toLowerCase();
+    if (alpha == 255) return '#$rgb';
+    final red = (argb >> 16) & 0xFF;
+    final green = (argb >> 8) & 0xFF;
+    final blue = argb & 0xFF;
+    return 'rgba($red,$green,$blue,${(alpha / 255).toStringAsFixed(3)})';
+  }
+
+  static String? _canonicalColorFromValue(String? value) {
+    if (value == null || value.isEmpty) return null;
+    // Color nodes in a shorthand background are outside `url(...)`; never
+    // mistake a color-like word inside a URL path for the canvas color.
+    final withoutUrls = value.replaceAll(_cssUrl, ' ');
+    final direct = _canonicalColor(withoutUrls);
+    if (direct != null) return direct;
+    final match = _anyColorToken.firstMatch(withoutUrls);
+    return match == null ? null : _canonicalColor(match.group(0));
+  }
+
+  /// Splits a style attribute without breaking `data:` URLs, whose payload
+  /// contains semicolons inside `url(...)` / quoted strings.
+  static Iterable<String> _splitDeclarations(String style) sync* {
+    var start = 0;
+    var quote = 0;
+    var parentheses = 0;
+    for (var index = 0; index < style.length; index++) {
+      final char = style[index];
+      final code = char.codeUnitAt(0);
+      if (quote != 0) {
+        if (code == 0x5C) {
+          index++;
+        } else if (code == quote) {
+          quote = 0;
+        }
+        continue;
+      }
+      if (code == 0x22 || code == 0x27) {
+        quote = code;
+      } else if (code == 0x28) {
+        parentheses++;
+      } else if (code == 0x29 && parentheses > 0) {
+        parentheses--;
+      } else if (code == 0x3B && parentheses == 0) {
+        yield style.substring(start, index);
+        start = index + 1;
+      }
+    }
+    if (start < style.length) yield style.substring(start);
+  }
+
+  static String? _declaration(String style, String property) {
+    for (final part in _splitDeclarations(style)) {
+      final separator = part.indexOf(':');
+      if (separator <= 0) continue;
+      if (part.substring(0, separator).trim().toLowerCase() != property) {
+        continue;
+      }
+      final value = part.substring(separator + 1).trim();
+      if (value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  static _BodyPresentation _readBodyPresentation(dom.Element body) {
+    final style = body.attributes['style'] ?? '';
+    var textColor = _canonicalColor(_declaration(style, 'color'));
+    var backgroundColor = _canonicalColor(
+      _declaration(style, 'background-color'),
+    );
+    backgroundColor ??= _canonicalColorFromValue(
+      _declaration(style, 'background'),
+    );
+
+    String? backgroundImage;
+    for (final declaration in <String?>[
+      _declaration(style, 'background-image'),
+      _declaration(style, 'background'),
+    ]) {
+      if (declaration == null) continue;
+      final match = _cssUrl.firstMatch(declaration);
+      if (match == null) continue;
+      final candidate = _normalizeCssTarget(
+        match.group(1) ?? match.group(2) ?? match.group(3) ?? '',
+      );
+      if (candidate.isNotEmpty) {
+        backgroundImage = candidate;
+        break;
+      }
+    }
+    final attributeImage = body.attributes['background'];
+    if (backgroundImage == null &&
+        attributeImage != null &&
+        attributeImage.isNotEmpty) {
+      backgroundImage = attributeImage;
+    }
+
+    textColor ??= _canonicalColor(body.attributes['text']);
+    backgroundColor ??= _canonicalColor(body.attributes['bgcolor']);
+
+    String? direction;
+    final styleDirection = _declaration(style, 'direction')?.toLowerCase();
+    final attributeDirection = body.attributes['dir']?.trim().toLowerCase();
+    for (final candidate in <String?>[styleDirection, attributeDirection]) {
+      if (candidate == 'ltr' || candidate == 'rtl' || candidate == 'auto') {
+        direction = candidate;
+        break;
+      }
+    }
+
+    return _BodyPresentation(
+      backgroundColor: backgroundColor,
+      textColor: textColor,
+      backgroundImage: backgroundImage,
+      direction: direction,
+    );
+  }
+
+  static String? _firstDeclaredTextColor(List<dom.Element> elements) {
+    for (final element in elements) {
+      final style = element.attributes['style'];
+      if (style != null && style.isNotEmpty) {
+        final color = _canonicalColor(_declaration(style, 'color'));
+        if (color != null) return color;
+      }
+      // Legacy mail uses <font color="#000">; it has no inline style.
+      final legacy = _canonicalColor(element.attributes['color']);
+      if (legacy != null) return legacy;
+    }
+    return null;
   }
 
   String? _sanitizeResourceUrl(
@@ -333,12 +639,7 @@ class HtmlEmailSanitizer {
           value[index] != '\r') {
         index++;
       }
-      final descriptor = value
-          .substring(
-            urlStart + url.length,
-            index,
-          )
-          .trim();
+      final descriptor = value.substring(urlStart + url.length, index).trim();
       if (url.isNotEmpty) {
         result.add(_SrcsetCandidate(url, descriptor));
       }
@@ -407,13 +708,10 @@ class HtmlEmailSanitizer {
   static String _normalizeCssTarget(String raw) {
     var value = raw;
     // Decode simple CSS hexadecimal escapes before normalizing slashes.
-    value = value.replaceAllMapped(
-      RegExp(r'\\([0-9a-fA-F]{1,6})\s?'),
-      (match) {
-        final codePoint = int.tryParse(match.group(1)!, radix: 16);
-        return codePoint == null ? '' : String.fromCharCode(codePoint);
-      },
-    );
+    value = value.replaceAllMapped(RegExp(r'\\([0-9a-fA-F]{1,6})\s?'), (match) {
+      final codePoint = int.tryParse(match.group(1)!, radix: 16);
+      return codePoint == null ? '' : String.fromCharCode(codePoint);
+    });
     value = value.replaceAll(RegExp(r'\\(.)'), r'$1');
     return normalizeUrl(value);
   }
@@ -460,10 +758,7 @@ class HtmlEmailSanitizer {
     return cid.trim();
   }
 
-  static String? _findCidCaseInsensitive(
-    Map<String, String> map,
-    String cid,
-  ) {
+  static String? _findCidCaseInsensitive(Map<String, String> map, String cid) {
     final lower = cid.toLowerCase();
     for (final entry in map.entries) {
       if (_normalizeCid(entry.key).toLowerCase() == lower) {
@@ -479,6 +774,20 @@ class _SrcsetCandidate {
 
   final String url;
   final String descriptor;
+}
+
+class _BodyPresentation {
+  const _BodyPresentation({
+    this.backgroundColor,
+    this.textColor,
+    this.backgroundImage,
+    this.direction,
+  });
+
+  final String? backgroundColor;
+  final String? textColor;
+  final String? backgroundImage;
+  final String? direction;
 }
 
 class LinkPhishingDecision {
@@ -604,8 +913,8 @@ class LinkPhishingGuard {
       reason: trusted
           ? '与发件人域名一致'
           : resemblesSender
-              ? '域名包含发件人域名但并非其子域名，疑似钓鱼'
-              : '外部域名，请确认后再打开',
+          ? '域名包含发件人域名但并非其子域名，疑似钓鱼'
+          : '外部域名，请确认后再打开',
       displayDomains: displayDomains,
     );
   }
@@ -614,12 +923,11 @@ class LinkPhishingGuard {
     String rawUrl, {
     required String senderEmail,
     String? displayText,
-  }) =>
-      inspect(
-        rawUrl,
-        senderEmail: senderEmail,
-        displayText: displayText,
-      ).suspicious;
+  }) => inspect(
+    rawUrl,
+    senderEmail: senderEmail,
+    displayText: displayText,
+  ).suspicious;
 
   static List<String> _extractDisplayDomains(String? displayText) {
     if (displayText == null || displayText.trim().isEmpty) return const [];
@@ -657,7 +965,6 @@ class LinkPhishingGuard {
 
   static bool _isSameOrSubdomain(String host, String domain) {
     final canonicalHost = _canonicalDomain(host);
-    return canonicalHost == domain ||
-        canonicalHost.endsWith('.$domain');
+    return canonicalHost == domain || canonicalHost.endsWith('.$domain');
   }
 }
