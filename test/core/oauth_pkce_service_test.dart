@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:local_mail_client/core/constants/provider_presets.dart';
 import 'package:local_mail_client/core/error/failures.dart';
+import 'package:local_mail_client/core/logging/sanitized_logger.dart';
 import 'package:local_mail_client/core/security/oauth_pkce_service.dart';
 import 'package:local_mail_client/core/security/secure_storage_service.dart';
 
@@ -498,6 +499,211 @@ void main() {
           ),
         ),
       );
+    });
+  });
+
+  group('Android Google failure classification', () {
+    Future<AuthFailure> captureFailure(Object error) async {
+      final service = OAuthPkceService(
+        platformOverride: TargetPlatform.android,
+        isWebOverride: false,
+        googleAuthPlatform: _FakeGoogleAuth(error: error),
+      );
+      try {
+        await service.authorize(
+          providerType: MailProviderType.gmail,
+          expectedEmail: 'alice@gmail.com',
+        );
+      } on AuthFailure catch (failure) {
+        return failure;
+      }
+      fail('Expected an AuthFailure');
+    }
+
+    test('keeps the native DEVELOPER_ERROR status instead of cancelling', () async {
+      final failure = await captureFailure(
+        PlatformException(
+          code: 'developer_error',
+          message: 'Google authorization is not configured for this app (status 10).',
+          details: const {
+            'statusCode': 10,
+            'stage': 'activity_result',
+            'resultCode': 0,
+          },
+        ),
+      );
+
+      expect(failure.reason, AuthFailureReason.oauthNotConfigured);
+      expect(failure.userMessage, contains('错误码 10'));
+      expect(failure.technicalDetail, contains('native_error=developer_error'));
+      expect(failure.technicalDetail, contains('status_code=10'));
+      expect(failure.technicalDetail, contains('stage=activity_result'));
+      expect(failure.technicalDetail, contains('result_code=0'));
+    });
+
+    test('maps network and timeout statuses as retryable diagnostics', () async {
+      for (final (code, status) in [('network_error', 7), ('timeout', 15)]) {
+        final failure = await captureFailure(
+          PlatformException(
+            code: code,
+            details: {'statusCode': status, 'stage': 'authorize_call'},
+          ),
+        );
+        expect(failure.reason, AuthFailureReason.unknown);
+        expect(failure.userMessage, contains('错误码 $status'));
+        expect(failure.userMessage, contains('检查网络'));
+        expect(failure.technicalDetail, contains('status_code=$status'));
+      }
+    });
+
+    test('keeps a real SDK CANCELED as cancelled', () async {
+      final failure = await captureFailure(
+        PlatformException(
+          code: 'cancelled',
+          details: const {'statusCode': 16, 'stage': 'activity_result'},
+        ),
+      );
+
+      expect(failure.reason, AuthFailureReason.oauthCancelled);
+      expect(failure.userMessage, contains('已取消或未完成'));
+      expect(failure.userMessage, contains('错误码 16'));
+    });
+
+    test('does not turn missing results or teardown into cancellation', () async {
+      final noResult = await captureFailure(
+        PlatformException(
+          code: 'no_result',
+          details: const {
+            'stage': 'activity_result',
+            'resultCode': 0,
+          },
+        ),
+      );
+      expect(noResult.reason, AuthFailureReason.unknown);
+      expect(noResult.userMessage, contains('未收到授权结果'));
+      expect(noResult.userMessage, contains('Google Cloud'));
+      expect(noResult.userMessage, isNot(contains('resultCode')));
+      expect(noResult.userMessage, isNot(contains('已取消')));
+
+      final interrupted = await captureFailure(
+        PlatformException(
+          code: 'interrupted',
+          details: const {'stage': 'activity_destroyed'},
+        ),
+      );
+      expect(interrupted.reason, AuthFailureReason.unknown);
+      expect(interrupted.userMessage, contains('中断'));
+      expect(interrupted.userMessage, isNot(contains('已取消')));
+    });
+
+    test('unknown errors stay unknown and expose their numeric status', () async {
+      final failure = await captureFailure(
+        PlatformException(
+          code: 'auth_failed',
+          details: const {
+            'statusCode': 13,
+            'stage': 'activity_result',
+            'resultCode': 0,
+          },
+        ),
+      );
+
+      expect(failure.reason, AuthFailureReason.unknown);
+      expect(failure.userMessage, contains('错误码 13'));
+      expect(failure.userMessage, isNot(contains('已取消')));
+    });
+
+    test('method-channel details are parsed and secrets stay redacted', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SanitizedLogger.instance.clear();
+      const channel = MethodChannel('com.localmail.local_mail_client/google_auth');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(
+          code: 'developer_error',
+          message: 'Authorization: Bearer ya29.message-secret',
+          details: const {
+            'statusCode': 10,
+            'stage': 'activity_result',
+            'resultCode': 0,
+            'accessToken': 'ya29.details-secret',
+            'email': 'should-not-leak@example.com',
+          },
+        );
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(channel, null),
+      );
+
+      final service = OAuthPkceService(
+        platformOverride: TargetPlatform.android,
+        isWebOverride: false,
+      );
+      AuthFailure? failure;
+      try {
+        await service.authorize(
+          providerType: MailProviderType.gmail,
+          expectedEmail: 'alice@gmail.com',
+        );
+      } on AuthFailure catch (error) {
+        failure = error;
+      }
+      expect(failure, isNotNull);
+      expect(failure!.reason, AuthFailureReason.oauthNotConfigured);
+      expect(failure.technicalDetail, contains('native_error=developer_error'));
+      expect(failure.technicalDetail, contains('status_code=10'));
+      expect(failure.technicalDetail, contains('stage=activity_result'));
+      expect(failure.technicalDetail, isNot(contains('ya29')));
+      expect(failure.technicalDetail, isNot(contains('should-not-leak')));
+
+      final logs = SanitizedLogger.instance.recentEntries.join('\n');
+      expect(logs, contains('native_error=developer_error'));
+      expect(logs, isNot(contains('ya29')));
+      expect(logs, isNot(contains('should-not-leak')));
+    });
+
+    test('foreign or malformed detail fields cannot leak or crash', () async {
+      SanitizedLogger.instance.clear();
+      final foreign = await captureFailure(
+        PlatformException(
+          code: 'developer_error ya29.code-secret should-not-leak@example.com',
+          message: 'Bearer ya29.message-secret should-not-leak@example.com',
+          details: {
+            'statusCode': 10.5,
+            'stage': 'activity_result ya29.stage-secret',
+            'resultCode': '0',
+            'accessToken': 'ya29.details-secret',
+            'email': 'should-not-leak@example.com',
+          },
+        ),
+      );
+      expect(foreign.reason, AuthFailureReason.unknown);
+      expect(foreign.technicalDetail, 'native_error=unknown');
+
+      final malformed = await captureFailure(
+        PlatformException(
+          code: 'no_result',
+          message: 'ya29.message-secret should-not-leak@example.com',
+          details: 'ya29.details-secret should-not-leak@example.com',
+        ),
+      );
+      expect(malformed.reason, AuthFailureReason.unknown);
+      expect(malformed.userMessage, contains('未收到授权结果'));
+      expect(malformed.technicalDetail, 'native_error=no_result');
+
+      final logs = SanitizedLogger.instance.recentEntries.join('\n');
+      expect(logs, contains('native_error=no_result'));
+      for (final secret in [
+        'ya29',
+        'should-not-leak',
+        'message-secret',
+        'details-secret',
+      ]) {
+        expect(foreign.technicalDetail, isNot(contains(secret)));
+        expect(malformed.technicalDetail, isNot(contains(secret)));
+        expect(logs, isNot(contains(secret)));
+      }
     });
   });
 

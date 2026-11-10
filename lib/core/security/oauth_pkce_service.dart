@@ -1159,7 +1159,11 @@ class OAuthPkceService {
     PlatformException error,
     String expectedEmail,
   ) {
-    final detail = SanitizedLogger.sanitize(error.message ?? error.code);
+    final details = _parseGoogleErrorDetails(error.details);
+    final statusCode = details.statusCode;
+    final numeric = statusCode == null ? '' : '（错误码 $statusCode）';
+    final detail = _googleDiagnosticDetail(error, details);
+    _logger.warn('OAuthPkce', 'Google authorization failure: $detail');
     return switch (error.code) {
       'gms_unavailable' => AuthFailure(
         reason: AuthFailureReason.oauthDeviceUnavailable,
@@ -1172,7 +1176,7 @@ class OAuthPkceService {
       'account_not_found' || 'sign_in_required' => AuthFailure(
         reason: AuthFailureReason.oauthWrongAccount,
         userMessage:
-            '设备上没有找到 $expectedEmail 对应的 Google 账户。'
+            '设备上没有找到 $expectedEmail 对应的 Google 账户$numeric。'
             '请先在系统设置中添加该 Google 账户，或点击“使用 Google 登录”选择正确账户。',
         technicalDetail: detail,
         cause: error,
@@ -1180,7 +1184,7 @@ class OAuthPkceService {
       'developer_error' => AuthFailure(
         reason: AuthFailureReason.oauthNotConfigured,
         userMessage:
-            'Google 登录配置未生效：请核对 Google Cloud 中 Android OAuth 客户端是否使用'
+            'Google 登录配置未生效$numeric：请核对 Google Cloud 中 Android OAuth 客户端是否使用'
             '包名 com.localmail.local_mail_client 和当前安装包的签名 SHA-1。'
             '更换签名或安装来源后需要同步更新注册。',
         technicalDetail: detail,
@@ -1188,13 +1192,13 @@ class OAuthPkceService {
       ),
       'network_error' || 'timeout' => AuthFailure(
         reason: AuthFailureReason.unknown,
-        userMessage: '网络或 Google Play 服务暂时不可用，请检查网络后重试。',
+        userMessage: '网络或 Google Play 服务暂时不可用$numeric，请检查网络后重试。',
         technicalDetail: detail,
         cause: error,
       ),
       'interaction_required' => AuthFailure(
         reason: AuthFailureReason.oauthTokenExpired,
-        userMessage: 'Google 授权已失效，需要重新登录该账户。请在账户管理中重新授权。',
+        userMessage: 'Google 授权已失效$numeric，需要重新登录该账户。请在账户管理中重新授权。',
         technicalDetail: detail,
         cause: error,
       ),
@@ -1206,17 +1210,96 @@ class OAuthPkceService {
       ),
       'cancelled' => AuthFailure(
         reason: AuthFailureReason.oauthCancelled,
-        userMessage: 'Google 登录已取消。',
+        userMessage: 'Google 授权已取消或未完成$numeric。',
+        technicalDetail: detail,
+        cause: error,
+      ),
+      'no_result' => AuthFailure(
+        reason: AuthFailureReason.unknown,
+        userMessage:
+            'Google 授权未完成：未收到授权结果。'
+            '如果不是你主动关闭授权页，请检查 Google Cloud 中 Android OAuth 客户端'
+            '（包名 + 签名 SHA-1）是否已注册，以及 Google Play 服务与网络是否正常后重试。',
+        technicalDetail: detail,
+        cause: error,
+      ),
+      'interrupted' => AuthFailure(
+        reason: AuthFailureReason.unknown,
+        userMessage: 'Google 授权被中断$numeric，请重试。',
         technicalDetail: detail,
         cause: error,
       ),
       _ => AuthFailure(
         reason: AuthFailureReason.unknown,
-        userMessage: 'Google 登录失败，请重试。',
+        userMessage: 'Google 登录失败$numeric，请重试。',
         technicalDetail: detail,
         cause: error,
       ),
     };
+  }
+
+  /// Codes and stages currently emitted by the Android bridge. Anything else
+  /// is treated as unknown so an arbitrary string can never reach diagnostics.
+  static const Set<String> _googleErrorCodes = {
+    'gms_unavailable',
+    'invalid_argument',
+    'authorization_in_progress',
+    'interaction_required',
+    'auth_failed',
+    'no_result',
+    'interrupted',
+    'developer_error',
+    'sign_in_required',
+    'cancelled',
+    'network_error',
+    'timeout',
+  };
+
+  static const Set<String> _googleErrorStages = {
+    'authorize_call',
+    'interactive_resolution',
+    'start_resolution',
+    'authorization_result',
+    'activity_result',
+    'activity_destroyed',
+  };
+
+  /// Reads the non-sensitive diagnostics sent by the Android bridge. Native
+  /// code sends only integer status fields and known stage strings; malformed
+  /// values and any other keys are ignored.
+  static ({int? statusCode, String? stage, int? resultCode})
+  _parseGoogleErrorDetails(Object? raw) {
+    if (raw is! Map) {
+      return (statusCode: null, stage: null, resultCode: null);
+    }
+    int? readInt(Object? value) => value is int ? value : null;
+
+    final stage = raw['stage'];
+    return (
+      statusCode: readInt(raw['statusCode']),
+      stage:
+          stage is String && _googleErrorStages.contains(stage) ? stage : null,
+      resultCode: readInt(raw['resultCode']),
+    );
+  }
+
+  /// The native message is deliberately excluded: sanitising arbitrary text
+  /// does not reliably redact bare emails or tokens. Only fixed fields from the
+  /// current bridge are logged.
+  static String _googleDiagnosticDetail(
+    PlatformException error,
+    ({int? statusCode, String? stage, int? resultCode}) details,
+  ) {
+    final code = _googleErrorCodes.contains(error.code) ? error.code : 'unknown';
+    final parts = <String>[
+      // Avoid the `code=` key so SanitizedLogger does not redact the fixed
+      // native error name as an OAuth authorization code.
+      'native_error=$code',
+      if (details.statusCode != null) 'status_code=${details.statusCode}',
+      if (details.stage != null) 'stage=${details.stage}',
+      if (details.resultCode != null) 'result_code=${details.resultCode}',
+    ];
+    return parts.join('; ');
   }
 
   static String _googleIosRedirectUri(String clientId) {

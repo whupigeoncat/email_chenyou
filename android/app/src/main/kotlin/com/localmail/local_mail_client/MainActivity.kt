@@ -1,7 +1,6 @@
 package com.localmail.local_mail_client
 
 import android.accounts.Account
-import android.app.Activity
 import android.content.Intent
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
@@ -106,7 +105,7 @@ class MainActivity : FlutterActivity() {
                     )
                 }
                 .addOnFailureListener { error ->
-                    failAuthorization(result, error, "Google authorization failed.")
+                    failAuthorization(result, error, "authorize_call")
                 }
         }
 
@@ -135,6 +134,7 @@ class MainActivity : FlutterActivity() {
                     result,
                     "interaction_required",
                     "Google authorization needs user interaction.",
+                    mapOf("stage" to "interactive_resolution"),
                 )
                 return
             }
@@ -151,14 +151,19 @@ class MainActivity : FlutterActivity() {
                     0,
                 )
             } catch (error: Exception) {
-                failAuthorization(result, error, "Unable to start Google sign-in.")
+                failAuthorization(result, error, "start_resolution")
             }
             return
         }
 
         val accessToken = authorizationResult.accessToken
         if (accessToken.isNullOrEmpty()) {
-            finishError(result, "auth_failed", "Google returned no access token.")
+            finishError(
+                result,
+                "auth_failed",
+                "Google returned no access token.",
+                mapOf("stage" to "authorization_result"),
+            )
             return
         }
         finishSuccess(result, accessToken, authorizationResult.grantedScopes)
@@ -179,8 +184,17 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        if (resultCode != Activity.RESULT_OK || data == null) {
-            finishError(result, "cancelled", "The user cancelled Google authorization.")
+        // Google's own ActivityResult sample parses any non-null intent without
+        // checking resultCode first: configuration errors arrive as an
+        // ApiException (for example DEVELOPER_ERROR) and must not be reported as
+        // a user cancellation.
+        if (data == null) {
+            finishError(
+                result,
+                "no_result",
+                "Google authorization did not finish: no result was returned. Please retry.",
+                mapOf("stage" to "activity_result", "resultCode" to resultCode),
+            )
             return
         }
         try {
@@ -194,10 +208,15 @@ class MainActivity : FlutterActivity() {
                 // Keep authorizationInFlight=true for this second request.
                 runAuthorization(email, scopes, false, null, result)
             } else {
-                finishError(result, "auth_failed", "Google returned no access token.")
+                finishError(
+                    result,
+                    "auth_failed",
+                    "Google returned no access token.",
+                    mapOf("stage" to "activity_result"),
+                )
             }
-        } catch (error: ApiException) {
-            failAuthorization(result, error, "Unable to read Google authorization result.")
+        } catch (error: Exception) {
+            failAuthorization(result, error, "activity_result", resultCode)
         }
     }
 
@@ -220,17 +239,45 @@ class MainActivity : FlutterActivity() {
         result: MethodChannel.Result,
         code: String,
         message: String,
+        details: Map<String, Any?>? = null,
     ) {
         endAuthorization()
-        result.error(code, message, null)
+        result.error(code, message, details)
     }
 
+    /**
+     * Sends only non-sensitive diagnostics: native status code, stage and the
+     * Activity result code. Never include tokens, the account email, an Intent
+     * dump, or the raw exception text.
+     */
     private fun failAuthorization(
         result: MethodChannel.Result,
         error: Exception,
-        fallback: String,
+        stage: String,
+        resultCode: Int? = null,
     ) {
-        finishError(result, errorCode(error), error.message ?: fallback)
+        val statusCode = (error as? ApiException)?.statusCode
+        val code = errorCode(error)
+        val details = mutableMapOf<String, Any?>("stage" to stage)
+        if (statusCode != null) details["statusCode"] = statusCode
+        if (resultCode != null) details["resultCode"] = resultCode
+        finishError(result, code, friendlyMessage(code, statusCode), details)
+    }
+
+    private fun friendlyMessage(code: String, statusCode: Int?): String {
+        val suffix = statusCode?.let { " (status $it)" } ?: ""
+        return when (code) {
+            "developer_error" ->
+                "Google authorization is not configured for this app$suffix. " +
+                    "Register the Android OAuth client for the package and SHA-1."
+            "network_error", "timeout" ->
+                "Network or Google Play services is temporarily unavailable$suffix. " +
+                    "Check the connection and retry."
+            "cancelled" -> "Google authorization was cancelled or not completed$suffix."
+            "sign_in_required" ->
+                "The Google account needs to sign in again$suffix."
+            else -> "Google authorization failed$suffix. Please retry."
+        }
     }
 
     private fun errorCode(error: Exception): String {
@@ -258,7 +305,14 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         val result = pendingResult
         if (result != null) {
-            finishError(result, "cancelled", "Google authorization was interrupted.")
+            // An Activity teardown is not a user cancellation; keep it separate
+            // so the UI does not blame the user.
+            finishError(
+                result,
+                "interrupted",
+                "Google authorization was interrupted because the screen closed. Please retry.",
+                mapOf("stage" to "activity_destroyed"),
+            )
         }
         super.onDestroy()
     }
