@@ -155,6 +155,13 @@ void main() {
       expect(settings.useShouldOverrideUrlLoading, isTrue);
       expect(settings.supportZoom, isTrue);
       expect(
+        settings.useHybridComposition,
+        isFalse,
+        reason:
+            'texture composition keeps the native HTML in sync with the '
+            'Flutter route fade/transform (Android only; ignored elsewhere)',
+      );
+      expect(
         SafeHtmlEmailView.buildWebViewGestureRecognizers(),
         isNotEmpty,
         reason: 'nested platform views need an eager recognizer to scroll',
@@ -576,6 +583,128 @@ void main() {
       expect(find.byKey(const Key('remote-content-banner')), findsOneWidget);
       expect(find.byKey(const Key('safe-html-canvas')), findsOneWidget);
     }
+  });
+
+  testWidgets('processing cache reuses HTML work but keeps theme canvas live', (
+    tester,
+  ) async {
+    SafeHtmlEmailView.resetDebugCounters();
+    addTearDown(SafeHtmlEmailView.resetDebugCounters);
+    var brightness = Brightness.light;
+    late StateSetter setRoot;
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          setRoot = setState;
+          return MaterialApp(
+            theme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF0F766E),
+                brightness: brightness,
+              ),
+            ),
+            home: const Scaffold(
+              body: SafeHtmlEmailView(
+                html: '<div style="color:#111111">Static body</div>',
+                senderEmail: 'sender@example.com',
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(SafeHtmlEmailView.debugSanitizeRuns, 1);
+    expect(SafeHtmlEmailView.debugLinkParseRuns, 1);
+    expect(SafeHtmlEmailView.debugTableScanRuns, 1);
+    expect(_canvasColor(tester), isNull);
+
+    setRoot(() {});
+    await tester.pumpAndSettle();
+    expect(
+      SafeHtmlEmailView.debugSanitizeRuns,
+      1,
+      reason: 'an unrelated rebuild must not re-sanitize',
+    );
+    expect(SafeHtmlEmailView.debugLinkParseRuns, 1);
+    expect(SafeHtmlEmailView.debugTableScanRuns, 1);
+
+    setRoot(() => brightness = Brightness.dark);
+    await tester.pumpAndSettle();
+    expect(
+      SafeHtmlEmailView.debugSanitizeRuns,
+      1,
+      reason: 'theme changes must recompute the canvas, not security parsing',
+    );
+    expect(_canvasColor(tester), isNotNull);
+  });
+
+  testWidgets('cache invalidates on consent, CID content and HTML changes', (
+    tester,
+  ) async {
+    SafeHtmlEmailView.resetDebugCounters();
+    addTearDown(SafeHtmlEmailView.resetDebugCounters);
+    var allowRemote = false;
+    var html =
+        '<img src="cid:logo">'
+        '<img src="https://tracker.example/pixel.png">'
+        '<table><tr><td>a</td></tr></table>'
+        '<table><tr><td>b</td></tr></table>';
+    final cidPaths = <String, String>{'logo': '/tmp/old.png'};
+    final documents = <String>[];
+    late StateSetter setHost;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              setHost = setState;
+              return SafeHtmlEmailView(
+                html: html,
+                senderEmail: 'sender@example.com',
+                allowRemoteImages: allowRemote,
+                cidToLocalPath: cidPaths,
+                webViewBuilder: (context, document, onOpenLink) {
+                  documents.add(document);
+                  return const SizedBox.expand();
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(SafeHtmlEmailView.debugSanitizeRuns, 1);
+    expect(documents.last, contains('old.png'));
+    expect(documents.last, isNot(contains('tracker.example')));
+
+    // Mutating the same Map in place must still invalidate the cache.
+    cidPaths['logo'] = '/tmp/new.png';
+    setHost(() {});
+    await tester.pumpAndSettle();
+    expect(SafeHtmlEmailView.debugSanitizeRuns, 2);
+    expect(documents.last, contains('new.png'));
+
+    setHost(() => allowRemote = true);
+    await tester.pumpAndSettle();
+    expect(SafeHtmlEmailView.debugSanitizeRuns, 3);
+    expect(documents.last, contains('tracker.example'));
+
+    setHost(() {
+      html =
+          '<p>changed</p>'
+          '<table><tr><td>c</td></tr></table>'
+          '<table><tr><td>d</td></tr></table>';
+    });
+    await tester.pumpAndSettle();
+    expect(SafeHtmlEmailView.debugSanitizeRuns, 4);
+    expect(documents.last, contains('changed'));
   });
 }
 

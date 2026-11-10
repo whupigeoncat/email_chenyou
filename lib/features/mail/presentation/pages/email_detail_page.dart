@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -8,6 +9,7 @@ import '../../../../app/di/core_providers.dart';
 import '../../domain/entities/mail_attachment.dart';
 import '../../domain/entities/outbox_message.dart';
 import '../../domain/entities/unified_email.dart';
+import '../../domain/services/verification_code_extractor.dart';
 import '../providers/email_detail_provider.dart';
 import '../providers/mail_providers.dart';
 import '../widgets/attachment_preview_sheet.dart';
@@ -25,8 +27,19 @@ class EmailDetailPage extends ConsumerStatefulWidget {
 }
 
 class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
+  static const VerificationCodeExtractor _codeExtractor =
+      VerificationCodeExtractor();
+
   final ScrollController _scrollController = ScrollController();
   bool _headerExpanded = false;
+
+  int? _codeEmailId;
+  String? _codeSubject;
+  String? _codePlainBody;
+  String? _codeHtmlBody;
+  bool _codeBodyDownloaded = false;
+  bool _codeComputed = false;
+  String? _verificationCode;
 
   @override
   void initState() {
@@ -106,6 +119,7 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
     EmailDetail notifier,
   ) {
     final hasHtml = email.htmlBody != null && email.htmlBody!.trim().isNotEmpty;
+    final verificationCode = _verificationCodeFor(email);
     return SingleChildScrollView(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -117,6 +131,16 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
             expanded: _headerExpanded,
             onToggle: () => setState(() => _headerExpanded = !_headerExpanded),
           ),
+          if (verificationCode != null) ...[
+            const SizedBox(height: 12),
+            _VerificationCodeCard(
+              code: verificationCode,
+              onCopy: () => _copyVerificationCode(
+                emailLocalId: email.localId,
+                code: verificationCode,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 6,
@@ -269,6 +293,57 @@ class _EmailDetailPageState extends ConsumerState<EmailDetailPage> {
     );
   }
 
+  /// Recomputes only when the message or its downloaded body actually changed.
+  /// Snippet text is never used because a truncated number is not a code.
+  String? _verificationCodeFor(UnifiedEmail email) {
+    final plain = email.plainBody;
+    final html = email.htmlBody;
+    if (_codeComputed &&
+        _codeEmailId == email.localId &&
+        _codeSubject == email.subject &&
+        _codePlainBody == plain &&
+        _codeHtmlBody == html &&
+        _codeBodyDownloaded == email.bodyDownloaded) {
+      return _verificationCode;
+    }
+
+    _codeEmailId = email.localId;
+    _codeSubject = email.subject;
+    _codePlainBody = plain;
+    _codeHtmlBody = html;
+    _codeBodyDownloaded = email.bodyDownloaded;
+    _codeComputed = true;
+    _verificationCode = email.bodyDownloaded
+        ? _codeExtractor.extract(
+            subject: email.subject,
+            plainBody: plain,
+            htmlBody: html,
+          )
+        : null;
+    return _verificationCode;
+  }
+
+  Future<void> _copyVerificationCode({
+    required int? emailLocalId,
+    required String code,
+  }) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    var copied = false;
+    try {
+      await Clipboard.setData(ClipboardData(text: code));
+      copied = true;
+    } on Object {
+      // Never surface the code or the platform exception to logs or UI.
+      copied = false;
+    }
+    // A copy started in message A must not surface feedback after the reader
+    // has switched to message B.
+    if (!mounted || widget.emailLocalId != emailLocalId) return;
+    messenger?.showSnackBar(
+      SnackBar(content: Text(copied ? '已复制验证码' : '复制失败，请长按验证码复制')),
+    );
+  }
+
   Future<void> _openCompose(ComposeMode mode, UnifiedEmail email) async {
     final account = await ref
         .read(authRepositoryProvider)
@@ -377,6 +452,66 @@ class _HeaderCard extends StatelessWidget {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VerificationCodeCard extends StatelessWidget {
+  const _VerificationCodeCard({required this.code, required this.onCopy});
+
+  final String code;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Card(
+      key: const Key('verification-code-card'),
+      margin: EdgeInsets.zero,
+      color: scheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '验证码',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: scheme.onSecondaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  SelectableText(
+                    code,
+                    key: const Key('verification-code-value'),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: scheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: IconButton.filledTonal(
+                key: const Key('copy-verification-code'),
+                tooltip: '复制验证码',
+                onPressed: onCopy,
+                icon: const Icon(Icons.copy_rounded, size: 20),
+              ),
+            ),
+          ],
         ),
       ),
     );

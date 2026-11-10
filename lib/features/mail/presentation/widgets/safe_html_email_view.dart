@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show Factory;
+import 'package:flutter/foundation.dart' show Factory, mapEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -99,6 +99,25 @@ class SafeHtmlEmailView extends StatefulWidget {
     return '${html.length}:$hash';
   }
 
+  /// Test-visible counters that prove the per-State processing cache actually
+  /// avoids repeating the expensive sanitize/DOM/table work on unrelated
+  /// rebuilds. They only increment while asserts are enabled (tests).
+  @visibleForTesting
+  static int debugSanitizeRuns = 0;
+
+  @visibleForTesting
+  static int debugLinkParseRuns = 0;
+
+  @visibleForTesting
+  static int debugTableScanRuns = 0;
+
+  @visibleForTesting
+  static void resetDebugCounters() {
+    debugSanitizeRuns = 0;
+    debugLinkParseRuns = 0;
+    debugTableScanRuns = 0;
+  }
+
   /// Gives the native platform view the gesture directly.
   ///
   /// The reader is embedded in a parent scroll view. Without an eager
@@ -132,6 +151,13 @@ class SafeHtmlEmailView extends StatefulWidget {
       disableContextMenu: true,
       verticalScrollBarEnabled: true,
       horizontalScrollBarEnabled: true,
+      // Android hybrid composition inserts a native view whose opacity and
+      // transform do not follow the Flutter route transition: during a back
+      // gesture the HTML can remain an opaque white rectangle after the
+      // header has faded. Texture composition participates in the Flutter
+      // layer tree, so the existing route animation and system back gesture
+      // stay untouched. The option is ignored on non-Android platforms.
+      useHybridComposition: false,
     );
   }
 
@@ -194,6 +220,7 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
   final LinkPhishingGuard _linkGuard = const LinkPhishingGuard();
   bool? _webViewOverride;
   Map<String, List<String>> _visibleLinkTexts = const {};
+  _ProcessedHtml? _processed;
 
   bool get _allowRemote => widget.allowRemoteImages || widget.trustedSender;
 
@@ -211,15 +238,11 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
 
   @override
   Widget build(BuildContext context) {
-    final result = _sanitizer.sanitize(
-      html: widget.html,
-      allowRemoteImages: widget.allowRemoteImages,
-      trustedSender: widget.trustedSender,
-      cidToLocalPath: widget.cidToLocalPath,
-    );
-    _visibleLinkTexts = _extractVisibleLinkTexts(result.html);
+    final processed = _processForWidget();
+    final result = processed.result;
+    _visibleLinkTexts = processed.visibleLinkTexts;
     final complex =
-        widget.autoUseWebViewForComplexTables && _isComplex(result.html);
+        widget.autoUseWebViewForComplexTables && processed.isComplex;
     final useWebView = _webViewOverride ?? complex;
     final palette = _resolveReadingPalette(context, result);
 
@@ -264,25 +287,7 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
               height: SafeHtmlEmailView.webViewHeightFor(
                 MediaQuery.sizeOf(context),
               ),
-              child: (widget.webViewBuilder ?? _defaultWebView)(
-                context,
-                SafeHtmlEmailView.buildCspDocument(
-                  result.html,
-                  allowRemoteImages: _allowRemote,
-                  // Native must use the same reading surface as Flutter.
-                  // Without this, a dark app + white body text would fall back
-                  // to the WebView's white default and become unreadable.
-                  backgroundColor: _cssColorOf(
-                    palette.background ?? Theme.of(context).colorScheme.surface,
-                  ),
-                  textColor: _cssColorOf(
-                    palette.foreground ??
-                        Theme.of(context).textTheme.bodyMedium?.color ??
-                        Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                _confirmAndOpenLink,
-              ),
+              child: _buildAdvancedRenderer(context, processed, palette),
             ),
           )
         else
@@ -345,6 +350,88 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
             ),
           ),
       ],
+    );
+  }
+
+  /// Reuses the expensive HTML work for this widget State only.
+  ///
+  /// Message switches, remote-consent changes and any CID content change must
+  /// invalidate it immediately. The CID snapshot is a value copy so a caller
+  /// that mutates the same Map in place is still detected.
+  _ProcessedHtml _processForWidget() {
+    final cached = _processed;
+    if (cached != null &&
+        (identical(cached.sourceHtml, widget.html) ||
+            cached.sourceHtml == widget.html) &&
+        cached.allowRemoteImages == widget.allowRemoteImages &&
+        cached.trustedSender == widget.trustedSender &&
+        mapEquals(cached.cidSnapshot, widget.cidToLocalPath)) {
+      return cached;
+    }
+
+    final cidSnapshot = Map<String, String>.unmodifiable(
+      Map<String, String>.of(widget.cidToLocalPath),
+    );
+    final result = _sanitizer.sanitize(
+      html: widget.html,
+      allowRemoteImages: widget.allowRemoteImages,
+      trustedSender: widget.trustedSender,
+      cidToLocalPath: cidSnapshot,
+    );
+    assert(() {
+      SafeHtmlEmailView.debugSanitizeRuns++;
+      return true;
+    }());
+    final visibleLinkTexts = _extractVisibleLinkTexts(result.html);
+    assert(() {
+      SafeHtmlEmailView.debugLinkParseRuns++;
+      return true;
+    }());
+    final isComplex = _isComplex(result.html);
+    assert(() {
+      SafeHtmlEmailView.debugTableScanRuns++;
+      return true;
+    }());
+
+    final processed = _ProcessedHtml(
+      sourceHtml: widget.html,
+      allowRemoteImages: widget.allowRemoteImages,
+      trustedSender: widget.trustedSender,
+      cidSnapshot: cidSnapshot,
+      result: result,
+      visibleLinkTexts: visibleLinkTexts,
+      isComplex: isComplex,
+    );
+    _processed = processed;
+    return processed;
+  }
+
+  Widget _buildAdvancedRenderer(
+    BuildContext context,
+    _ProcessedHtml processed,
+    _ReadingPalette palette,
+  ) {
+    // Native must use the same reading surface as Flutter. Without this, a
+    // dark app + white body text would fall back to the WebView's white
+    // default and become unreadable.
+    final document = processed.nativeDocument(
+      allowRemoteImages: _allowRemote,
+      backgroundColor: _cssColorOf(
+        palette.background ?? Theme.of(context).colorScheme.surface,
+      ),
+      textColor: _cssColorOf(
+        palette.foreground ??
+            Theme.of(context).textTheme.bodyMedium?.color ??
+            Theme.of(context).colorScheme.onSurface,
+      ),
+    );
+    final builder = widget.webViewBuilder;
+    if (builder != null) return builder(context, document, _confirmAndOpenLink);
+    return _defaultWebView(
+      context,
+      document,
+      _confirmAndOpenLink,
+      signature: processed.nativeSignature,
     );
   }
 
@@ -434,14 +521,15 @@ class _SafeHtmlEmailViewState extends State<SafeHtmlEmailView> {
   Widget _defaultWebView(
     BuildContext context,
     String html,
-    Future<bool> Function(String url) onOpenLink,
-  ) {
+    Future<bool> Function(String url) onOpenLink, {
+    String? signature,
+  }) {
     return InAppWebView(
       // `initialData` is only read when the native view is created, so the
       // key includes the content signature. Consent changes and message
       // switches then replace the native content and reset scroll position.
       key: ValueKey(
-        'safe-inapp-webview-${SafeHtmlEmailView.contentSignature(html)}',
+        'safe-inapp-webview-${signature ?? SafeHtmlEmailView.contentSignature(html)}',
       ),
       initialData: InAppWebViewInitialData(
         data: html,
@@ -584,6 +672,57 @@ class _SafeLinkWidgetFactory extends WidgetFactory {
     }
     return super.buildGestureRecognizer(tree, onTap: onTap);
   }
+}
+
+class _ProcessedHtml {
+  _ProcessedHtml({
+    required this.sourceHtml,
+    required this.allowRemoteImages,
+    required this.trustedSender,
+    required this.cidSnapshot,
+    required this.result,
+    required this.visibleLinkTexts,
+    required this.isComplex,
+  });
+
+  final String sourceHtml;
+  final bool allowRemoteImages;
+  final bool trustedSender;
+  final Map<String, String> cidSnapshot;
+  final HtmlSanitizeResult result;
+  final Map<String, List<String>> visibleLinkTexts;
+  final bool isComplex;
+
+  String? _nativeMemoKey;
+  String? _nativeDocument;
+  String? _nativeSignature;
+
+  /// Rebuilds the native document only when the sanitized body or the resolved
+  /// reading palette changed. The content signature drives the WebView key and
+  /// must keep refreshing after consent/content changes.
+  String nativeDocument({
+    required bool allowRemoteImages,
+    required String? backgroundColor,
+    required String? textColor,
+  }) {
+    final memoKey =
+        '$allowRemoteImages|${backgroundColor ?? ''}|${textColor ?? ''}';
+    if (_nativeMemoKey == memoKey && _nativeDocument != null) {
+      return _nativeDocument!;
+    }
+    final document = SafeHtmlEmailView.buildCspDocument(
+      result.html,
+      allowRemoteImages: allowRemoteImages,
+      backgroundColor: backgroundColor,
+      textColor: textColor,
+    );
+    _nativeMemoKey = memoKey;
+    _nativeDocument = document;
+    _nativeSignature = SafeHtmlEmailView.contentSignature(document);
+    return document;
+  }
+
+  String get nativeSignature => _nativeSignature!;
 }
 
 class _RemoteContentBanner extends StatelessWidget {

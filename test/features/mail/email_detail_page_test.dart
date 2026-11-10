@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_mail_client/app/di/core_providers.dart';
@@ -396,4 +399,336 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   });
+
+  testWidgets('verification code card copies only on tap', (tester) async {
+    final fixture = await MailFixture.create();
+    addTearDown(fixture.dispose);
+    final auth = FakeAuthRepository()..accounts.add(fixture.account);
+    addTearDown(auth.dispose);
+    await (fixture.database.update(
+      fixture.database.dbEmails,
+    )..where((table) => table.localId.equals(fixture.emailLocalId))).write(
+      DbEmailsCompanion(plainBody: const Value('您的验证码是 123456，5 分钟内有效。')),
+    );
+    final clipboardCalls = <MethodCall>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') clipboardCalls.add(call);
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          mailLocalRepositoryProvider.overrideWithValue(
+            fixture.localRepository,
+          ),
+          authRepositoryProvider.overrideWithValue(auth),
+          trustedSendersRepositoryProvider.overrideWithValue(
+            TrustedSendersRepositoryImpl(database: fixture.database),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: EmailDetailPage(
+              emailLocalId: fixture.emailLocalId,
+              embedded: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('verification-code-card')), findsOneWidget);
+    final value = tester.widget<SelectableText>(
+      find.byKey(const Key('verification-code-value')),
+    );
+    expect(value.data, '123456');
+    expect(clipboardCalls, isEmpty, reason: 'never copy automatically');
+
+    await tester.tap(find.byKey(const Key('copy-verification-code')));
+    await tester.pumpAndSettle();
+
+    expect(clipboardCalls, hasLength(1));
+    expect((clipboardCalls.single.arguments as Map)['text'], '123456');
+    expect(find.text('已复制验证码'), findsOneWidget);
+    expect(find.byKey(const Key('verification-code-card')), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('clipboard failure reports recovery copy, not the code', (
+    tester,
+  ) async {
+    final fixture = await MailFixture.create();
+    addTearDown(fixture.dispose);
+    final auth = FakeAuthRepository()..accounts.add(fixture.account);
+    addTearDown(auth.dispose);
+    await (fixture.database.update(
+      fixture.database.dbEmails,
+    )..where((table) => table.localId.equals(fixture.emailLocalId))).write(
+      DbEmailsCompanion(plainBody: const Value('您的验证码是 123456，5 分钟内有效。')),
+    );
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        throw PlatformException(code: 'clipboard-unavailable');
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          mailLocalRepositoryProvider.overrideWithValue(
+            fixture.localRepository,
+          ),
+          authRepositoryProvider.overrideWithValue(auth),
+          trustedSendersRepositoryProvider.overrideWithValue(
+            TrustedSendersRepositoryImpl(database: fixture.database),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: EmailDetailPage(
+              emailLocalId: fixture.emailLocalId,
+              embedded: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('copy-verification-code')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('已复制验证码'), findsNothing);
+    final snackBar = tester.widget<SnackBar>(find.byType(SnackBar));
+    final content = snackBar.content as Text;
+    expect(content.data, '复制失败，请长按验证码复制');
+    expect(content.data, isNot(contains('123456')));
+    expect(content.data, isNot(contains('clipboard-unavailable')));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('switching messages clears the code and late copy feedback', (
+    tester,
+  ) async {
+    final fixture = await MailFixture.create();
+    addTearDown(fixture.dispose);
+    final auth = FakeAuthRepository()..accounts.add(fixture.account);
+    addTearDown(auth.dispose);
+    await (fixture.database.update(
+      fixture.database.dbEmails,
+    )..where((table) => table.localId.equals(fixture.emailLocalId))).write(
+      DbEmailsCompanion(plainBody: const Value('您的验证码是 123456，5 分钟内有效。')),
+    );
+    final secondId = await fixture.database
+        .into(fixture.database.dbEmails)
+        .insert(
+          DbEmailsCompanion.insert(
+            accountId: fixture.account.id,
+            folderId: fixture.folder.id,
+            uid: 2,
+            subject: 'Second message',
+            fromName: 'Other',
+            fromAddress: 'other@example.com',
+            toRecipientsJson: '[]',
+            ccJson: '[]',
+            snippet: 'second',
+            sentAt: DateTime.utc(2026, 1, 2).millisecondsSinceEpoch,
+            plainBody: const Value('No verification code here.'),
+            htmlBody: const Value('<p>Second body</p>'),
+            bodyDownloaded: const Value(true),
+          ),
+        );
+
+    final clipboardCompleter = Completer<void>();
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        await clipboardCompleter.future;
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    var currentId = fixture.emailLocalId;
+    late StateSetter setHost;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          mailLocalRepositoryProvider.overrideWithValue(
+            fixture.localRepository,
+          ),
+          authRepositoryProvider.overrideWithValue(auth),
+          trustedSendersRepositoryProvider.overrideWithValue(
+            TrustedSendersRepositoryImpl(database: fixture.database),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                setHost = setState;
+                return EmailDetailPage(emailLocalId: currentId, embedded: true);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('verification-code-card')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('copy-verification-code')));
+    await tester.pump();
+
+    setHost(() => currentId = secondId);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('verification-code-card')), findsNothing);
+    expect(find.byKey(const Key('verification-code-value')), findsNothing);
+
+    clipboardCompleter.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('已复制验证码'), findsNothing);
+    expect(find.text('复制失败，请长按验证码复制'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('verification code card fits 320 width at 2x text', (
+    tester,
+  ) async {
+    final fixture = await MailFixture.create();
+    addTearDown(fixture.dispose);
+    final auth = FakeAuthRepository()..accounts.add(fixture.account);
+    addTearDown(auth.dispose);
+    await (fixture.database.update(
+      fixture.database.dbEmails,
+    )..where((table) => table.localId.equals(fixture.emailLocalId))).write(
+      DbEmailsCompanion(plainBody: const Value('您的验证码是 123456，5 分钟内有效。')),
+    );
+
+    tester.view.physicalSize = const Size(320, 720);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          mailLocalRepositoryProvider.overrideWithValue(
+            fixture.localRepository,
+          ),
+          authRepositoryProvider.overrideWithValue(auth),
+          trustedSendersRepositoryProvider.overrideWithValue(
+            TrustedSendersRepositoryImpl(database: fixture.database),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: EmailDetailPage(
+              emailLocalId: fixture.emailLocalId,
+              embedded: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('verification-code-card')), findsOneWidget);
+    final copySize = tester.getSize(
+      find.byKey(const Key('copy-verification-code')),
+    );
+    expect(copySize.width, greaterThanOrEqualTo(48));
+    expect(copySize.height, greaterThanOrEqualTo(48));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('verification code updates and clears with the downloaded body', (
+    tester,
+  ) async {
+    final fixture = await MailFixture.create();
+    addTearDown(fixture.dispose);
+    final auth = FakeAuthRepository()..accounts.add(fixture.account);
+    addTearDown(auth.dispose);
+    await (fixture.database.update(
+      fixture.database.dbEmails,
+    )..where((table) => table.localId.equals(fixture.emailLocalId))).write(
+      DbEmailsCompanion(plainBody: const Value('您的验证码是 123456，5 分钟内有效。')),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          mailLocalRepositoryProvider.overrideWithValue(
+            fixture.localRepository,
+          ),
+          authRepositoryProvider.overrideWithValue(auth),
+          trustedSendersRepositoryProvider.overrideWithValue(
+            TrustedSendersRepositoryImpl(database: fixture.database),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: EmailDetailPage(
+              emailLocalId: fixture.emailLocalId,
+              embedded: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(_codeValue(tester), '123456');
+
+    await (fixture.database.update(
+      fixture.database.dbEmails,
+    )..where((table) => table.localId.equals(fixture.emailLocalId))).write(
+      DbEmailsCompanion(plainBody: const Value('您的验证码是 654321，10 分钟内有效。')),
+    );
+    await tester.pumpAndSettle();
+    expect(_codeValue(tester), '654321');
+
+    await (fixture.database.update(fixture.database.dbEmails)
+          ..where((table) => table.localId.equals(fixture.emailLocalId)))
+        .write(DbEmailsCompanion(plainBody: const Value('您的邮件已送达，无需操作。')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('verification-code-card')), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
+}
+
+String? _codeValue(WidgetTester tester) {
+  final finder = find.byKey(const Key('verification-code-value'));
+  if (finder.evaluate().isEmpty) return null;
+  return tester.widget<SelectableText>(finder).data;
 }
