@@ -331,6 +331,28 @@ class EnoughMailImapSession implements ImapSession {
   }
 
   @override
+  Future<RemoteNewMailSearch> searchNewMailUids({required int fromUid}) {
+    return _guard(authType: _account?.authType, () async {
+      if (fromUid < 1) return const RemoteNewMailSearch.empty();
+      final criteria = 'UID $fromUid:*';
+      final all = await _client
+          .uidSearchMessages(searchCriteria: criteria)
+          .timeout(_commandTimeout);
+      final unseen = await _client
+          .uidSearchMessages(searchCriteria: '$criteria UNSEEN')
+          .timeout(_commandTimeout);
+      return RemoteNewMailSearch(
+        allUids: List<int>.unmodifiable(
+          all.matchingSequence?.toList() ?? const <int>[],
+        ),
+        unseenUids: List<int>.unmodifiable(
+          unseen.matchingSequence?.toList() ?? const <int>[],
+        ),
+      );
+    });
+  }
+
+  @override
   Future<bool> containsMessageId(String messageId) {
     return _guard(authType: _account?.authType, () async {
       if (messageId.isEmpty || messageId.contains(RegExp(r'[\r\n\u0000]'))) {

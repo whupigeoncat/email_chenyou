@@ -7,6 +7,8 @@ import '../../core/logging/sanitized_logger.dart';
 import '../../core/network/connectivity_monitor.dart';
 import '../../core/network/lifecycle_manager.dart';
 import '../../features/mail/data/services/account_sync_bootstrap.dart';
+import '../../features/notifications/data/battery_notification_platform.dart';
+import '../../features/notifications/data/notification_scheduling_bootstrap.dart';
 import '../../features/mail/data/services/inbox_sync_coordinator.dart';
 import '../../features/mail/data/services/outbox_queue_service.dart';
 import '../../features/mail/domain/entities/outbox_message.dart';
@@ -47,9 +49,17 @@ AppRuntime appRuntime(Ref ref) {
   lifecycle.start();
   connectivity.start();
   syncCoordinator.start();
+  final notifications = BatteryNotificationPlatform.instance;
+  final notificationScheduling = NotificationSchedulingBootstrap(
+    getAccounts: repository.getAccounts,
+    watchAccounts: repository.watchAccounts,
+    setHasEnabledAccounts: notifications.setHasEnabledAccounts,
+    cancelNotifications: notifications.cancelNotifications,
+  );
   unawaited(() async {
     try {
       await repository.initialize();
+      await notificationScheduling.start();
       await bootstrap.start();
       await outboxQueue.start(networkRestored: connectivity.networkRestored);
       final sent = await ref
@@ -82,6 +92,7 @@ AppRuntime appRuntime(Ref ref) {
     unawaited(syncCoordinator.dispose());
     unawaited(bootstrap.dispose());
     unawaited(outboxQueue.dispose());
+    unawaited(notificationScheduling.dispose());
   });
 
   return AppRuntime(

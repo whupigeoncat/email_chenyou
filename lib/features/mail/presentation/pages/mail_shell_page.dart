@@ -11,8 +11,11 @@ import '../../../auth/presentation/pages/account_manage_page.dart';
 import '../../../auth/presentation/pages/add_account_wizard_page.dart';
 import '../../domain/entities/mail_folder.dart';
 import '../../domain/entities/outbox_message.dart';
+import '../../../notifications/data/battery_notification_platform.dart';
+import '../../../notifications/presentation/notification_settings_page.dart';
 import '../providers/mail_providers.dart';
 import '../providers/unified_inbox_provider.dart';
+import '../services/compose_route_guard.dart';
 import '../widgets/account_color_badge.dart';
 import 'compose_email_page.dart';
 import 'email_detail_page.dart';
@@ -41,6 +44,59 @@ class _MailShellPageState extends ConsumerState<MailShellPage> {
   /// a single account is expanded, otherwise only the selected account.
   final Set<String> _expandedAccountIds = <String>{};
   final Set<String> _collapsedAccountIds = <String>{};
+  StreamSubscription<void>? _notificationOpenSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenForNotificationOpen();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_notificationOpenSub?.cancel());
+    super.dispose();
+  }
+
+  Future<void> _listenForNotificationOpen() async {
+    final notifications = BatteryNotificationPlatform.instance;
+    notifications.initialize();
+    _notificationOpenSub = notifications.openInboxRequests.listen((_) {
+      _openInboxFromNotification();
+    });
+    if (await notifications.consumePendingInboxOpen()) {
+      _openInboxFromNotification();
+    }
+  }
+
+  void _openInboxFromNotification() {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ComposeRouteGuard.blocksPop) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请先保存或关闭正在编辑的邮件，再查看新邮件。')));
+        return;
+      }
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      final view = ref.read(unifiedInboxViewProvider.notifier);
+      view.selectAccount(null);
+      unawaited(view.openFolder(null));
+      setState(() => _selectedEmailLocalId = null);
+    });
+  }
+
+  void _openNotificationSettings(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => NotificationSettingsPage(
+          resetBaselines: () =>
+              ref.read(inboxNotificationStateStoreProvider).resetAll(),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +219,13 @@ class _MailShellPageState extends ConsumerState<MailShellPage> {
     return AppBar(
       title: const Text('本地邮箱'),
       actions: [
+        if (BatteryNotificationPlatform.instance.isSupported)
+          IconButton(
+            key: const Key('open-notification-settings'),
+            tooltip: '通知设置',
+            onPressed: () => _openNotificationSettings(context),
+            icon: const Icon(Icons.notifications_outlined),
+          ),
         IconButton(
           key: const Key('open-search'),
           tooltip: '搜索',
@@ -203,6 +266,13 @@ class _MailShellPageState extends ConsumerState<MailShellPage> {
         ),
         title: Text(view.title),
         actions: [
+          if (BatteryNotificationPlatform.instance.isSupported)
+            IconButton(
+              key: const Key('open-notification-settings'),
+              tooltip: '通知设置',
+              onPressed: () => _openNotificationSettings(context),
+              icon: const Icon(Icons.notifications_outlined),
+            ),
           IconButton(
             key: const Key('open-search'),
             tooltip: '搜索',

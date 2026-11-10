@@ -12,6 +12,7 @@ class FakeImapSessionFactory implements ImapSessionFactory {
   FakeImapSessionFactory({
     this.connectDelay = Duration.zero,
     this.logoutDelay = Duration.zero,
+    this.selectDelay = Duration.zero,
     List<RemoteMailboxInfo>? mailboxes,
     Map<String, RemoteMailboxStatus>? statuses,
     Map<String, List<RemoteFetchedMessage>>? headers,
@@ -29,6 +30,7 @@ class FakeImapSessionFactory implements ImapSessionFactory {
 
   final Duration connectDelay;
   final Duration logoutDelay;
+  Duration selectDelay;
 
   final List<FakeImapSession> sessions = <FakeImapSession>[];
   final List<String> protocolLog = <String>[];
@@ -43,6 +45,10 @@ class FakeImapSessionFactory implements ImapSessionFactory {
   /// When set, `uidFetchMessageHeaders` returns exactly this list to emulate
   /// the RFC 3501 `fromUid:*` "last message echo" quirk.
   List<RemoteFetchedMessage>? uidFetchResponse;
+
+  /// Overrides the UID-only background search when a test needs the `n:*`
+  /// echo or a non-message count.
+  RemoteNewMailSearch? newMailSearchResponse;
 
   Map<int, List<String>>? flagFetchResponse;
   final List<int> flagFetchBatchSizes = [];
@@ -60,6 +66,7 @@ class FakeImapSessionFactory implements ImapSessionFactory {
   int listMailboxesCalls = 0;
   int fetchHeaderCalls = 0;
   int uidFetchHeaderCalls = 0;
+  int newMailSearchCalls = 0;
   int uidFetchFullCalls = 0;
   int attachmentFetchCalls = 0;
   int flagStoreCalls = 0;
@@ -165,6 +172,9 @@ class FakeImapSession implements ImapSession {
     _selectedFolder = remoteFolderName;
     _factory.selectStatusCalls++;
     _factory.protocolLog.add('select:$index:$remoteFolderName');
+    if (_factory.selectDelay > Duration.zero) {
+      await Future<void>.delayed(_factory.selectDelay);
+    }
     final status =
         _factory.statuses[remoteFolderName] ??
         RemoteMailboxStatus(
@@ -241,6 +251,28 @@ class FakeImapSession implements ImapSession {
     return messages.length > limit
         ? messages.sublist(messages.length - limit)
         : messages;
+  }
+
+  @override
+  Future<RemoteNewMailSearch> searchNewMailUids({required int fromUid}) async {
+    _factory.newMailSearchCalls++;
+    _factory.protocolLog.add('searchNewMail:$index:$fromUid');
+    final override = _factory.newMailSearchResponse;
+    if (override != null) return override;
+    final folder = _selectedFolder ?? 'INBOX';
+    final messages = _factory.headers[folder] ?? const <RemoteFetchedMessage>[];
+    final all = <int>[
+      for (final message in messages)
+        if (message.uid >= fromUid) message.uid,
+    ]..sort();
+    final unseen = <int>[
+      for (final message in messages)
+        if (message.uid >= fromUid && !message.isSeen) message.uid,
+    ]..sort();
+    return RemoteNewMailSearch(
+      allUids: List<int>.unmodifiable(all),
+      unseenUids: List<int>.unmodifiable(unseen),
+    );
   }
 
   @override

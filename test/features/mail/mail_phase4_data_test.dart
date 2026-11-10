@@ -183,8 +183,8 @@ void main() {
       addTearDown(db.close);
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.read<int>('user_version'), 6);
-      expect(db.schemaVersion, 6);
+      expect(version.read<int>('user_version'), 7);
+      expect(db.schemaVersion, 7);
       expect(
         (await db.select(db.dbAccounts).get()).single.email,
         'a@example.com',

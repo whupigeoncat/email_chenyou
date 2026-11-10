@@ -1416,6 +1416,103 @@ final class DeleteOutboxMessageUseCaseProvider
 String _$deleteOutboxMessageUseCaseHash() =>
     r'292aeb3b84352a09e9141870015456c24df53ede';
 
+@ProviderFor(inboxNotificationStateStore)
+final inboxNotificationStateStoreProvider =
+    InboxNotificationStateStoreProvider._();
+
+final class InboxNotificationStateStoreProvider
+    extends
+        $FunctionalProvider<
+          InboxNotificationStateStore,
+          InboxNotificationStateStore,
+          InboxNotificationStateStore
+        >
+    with $Provider<InboxNotificationStateStore> {
+  InboxNotificationStateStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'inboxNotificationStateStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$inboxNotificationStateStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<InboxNotificationStateStore> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  InboxNotificationStateStore create(Ref ref) {
+    return inboxNotificationStateStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(InboxNotificationStateStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<InboxNotificationStateStore>(value),
+    );
+  }
+}
+
+String _$inboxNotificationStateStoreHash() =>
+    r'fc286d592bedddd6b30d5aae91b9d36f2b13336b';
+
+@ProviderFor(foregroundInboxMarker)
+final foregroundInboxMarkerProvider = ForegroundInboxMarkerProvider._();
+
+final class ForegroundInboxMarkerProvider
+    extends
+        $FunctionalProvider<
+          ForegroundInboxMarker,
+          ForegroundInboxMarker,
+          ForegroundInboxMarker
+        >
+    with $Provider<ForegroundInboxMarker> {
+  ForegroundInboxMarkerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'foregroundInboxMarkerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$foregroundInboxMarkerHash();
+
+  @$internal
+  @override
+  $ProviderElement<ForegroundInboxMarker> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  ForegroundInboxMarker create(Ref ref) {
+    return foregroundInboxMarker(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ForegroundInboxMarker value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ForegroundInboxMarker>(value),
+    );
+  }
+}
+
+String _$foregroundInboxMarkerHash() =>
+    r'dec2dbbcf50804c8095630b97b9586868b863f59';
+
 @ProviderFor(inboxSyncCoordinator)
 final inboxSyncCoordinatorProvider = InboxSyncCoordinatorProvider._();
 
@@ -1462,7 +1559,7 @@ final class InboxSyncCoordinatorProvider
 }
 
 String _$inboxSyncCoordinatorHash() =>
-    r'5ecf1df41774d0c7d86a5615571589f0693ebd11';
+    r'b41b38253771801418616d6d9bc1d3d6912e3924';
 
 @ProviderFor(accountSyncBootstrap)
 final accountSyncBootstrapProvider = AccountSyncBootstrapProvider._();

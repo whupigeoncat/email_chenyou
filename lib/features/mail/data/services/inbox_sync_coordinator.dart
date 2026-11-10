@@ -18,12 +18,15 @@ class InboxSyncCoordinator {
     required this._syncAccount,
     this._debounce = const Duration(milliseconds: 800),
     SanitizedLogger? logger,
-  }) : _logger = logger ?? SanitizedLogger.instance;
+    Future<void> Function(String accountId)? notifySynced,
+  }) : _logger = logger ?? SanitizedLogger.instance,
+       _onAccountSynced = notifySynced;
 
   final ConnectionPool _connectionPool;
   final Future<void> Function(String accountId) _syncAccount;
   final Duration _debounce;
   final SanitizedLogger _logger;
+  final Future<void> Function(String accountId)? _onAccountSynced;
 
   StreamSubscription<AccountInboxNotification>? _eventSubscription;
   StreamSubscription<List<String>>? _reconnectedSubscription;
@@ -83,6 +86,18 @@ class InboxSyncCoordinator {
     _running.add(accountId);
     try {
       await _syncAccount(accountId);
+      // Foreground sync is the authoritative "user has seen this" signal.
+      // Advancing the notification watermark here keeps the headless checker
+      // from re-notifying mail that is already visible in the app.
+      try {
+        await _onAccountSynced?.call(accountId);
+      } catch (error) {
+        _logger.warn(
+          'InboxSync',
+          'Failed to advance notification watermark',
+          error,
+        );
+      }
       final shortId = accountId.length > 8
           ? accountId.substring(0, 8)
           : accountId;

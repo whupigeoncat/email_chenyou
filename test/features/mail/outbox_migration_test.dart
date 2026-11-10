@@ -166,7 +166,7 @@ NativeDatabase _fixtureDatabase(File file, int version, String sql) {
 
 void main() {
   test(
-    'real v2 database upgrades to v6, keeps rows/FTS and adds outbox',
+    'real v2 database upgrades to v7, keeps rows/FTS and adds outbox',
     () async {
       final dir = Directory.systemTemp.createTempSync('outbox_migration_v2_');
       addTearDown(() => dir.delete(recursive: true));
@@ -182,8 +182,8 @@ void main() {
       addTearDown(db.close);
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.read<int>('user_version'), 6);
-      expect(db.schemaVersion, 6);
+      expect(version.read<int>('user_version'), 7);
+      expect(db.schemaVersion, 7);
       expect((await db.select(db.dbEmails).get()).single.subject, 'Old report');
       expect(
         (await db.select(db.dbTrustedSenders).get()).single.senderEmail,
@@ -227,7 +227,7 @@ void main() {
     },
   );
 
-  test('real v3 database upgrades to v6 without losing outbox rows', () async {
+  test('real v3 database upgrades to v7 without losing outbox rows', () async {
     final dir = Directory.systemTemp.createTempSync('outbox_migration_v3_');
     addTearDown(() => dir.delete(recursive: true));
     final file = File(p.join(dir.path, 'mail.sqlite'));
@@ -242,7 +242,7 @@ void main() {
     addTearDown(db.close);
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 6);
+    expect(version.read<int>('user_version'), 7);
     final outbox = await db.select(db.dbOutboxMessages).getSingle();
     expect(outbox.subject, 'v3 draft');
     expect(outbox.outgoingMessageId, null);
@@ -263,7 +263,7 @@ void main() {
   });
 
   test(
-    'real v4 database upgrades to v6 with indexes and data preserved',
+    'real v4 database upgrades to v7 with indexes and data preserved',
     () async {
       final dir = Directory.systemTemp.createTempSync('outbox_migration_v4_');
       addTearDown(() => dir.delete(recursive: true));
@@ -283,8 +283,8 @@ void main() {
       addTearDown(db.close);
 
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.read<int>('user_version'), 6);
-      expect(db.schemaVersion, 6);
+      expect(version.read<int>('user_version'), 7);
+      expect(db.schemaVersion, 7);
       final outbox = await db.select(db.dbOutboxMessages).getSingle();
       expect(outbox.subject, 'v3 draft');
       expect(outbox.outgoingMessageId, null);
@@ -302,6 +302,53 @@ void main() {
       });
     },
   );
+
+  test('real v6 database upgrades to v7 and preserves accounts/emails/outbox', () async {
+    final dir = Directory.systemTemp.createTempSync('outbox_migration_v6_');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File(p.join(dir.path, 'mail.sqlite'));
+    final sql =
+        '${_baseSchema(withTrusted: true, withOutbox: true, outboxHasOutgoingId: true)}'
+        'ALTER TABLE db_accounts ADD COLUMN save_sent_copy INTEGER NOT NULL DEFAULT 0;'
+        'ALTER TABLE db_outbox_messages ADD COLUMN sent_copy_saved INTEGER NOT NULL DEFAULT 0;';
+
+    final db = AppDatabase.forTesting(_fixtureDatabase(file, 6, sql));
+    addTearDown(db.close);
+
+    final version = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(version.read<int>('user_version'), 7);
+    expect(db.schemaVersion, 7);
+    expect((await db.select(db.dbAccounts).getSingle()).email, 'a@example.com');
+    expect((await db.select(db.dbEmails).getSingle()).subject, 'Old report');
+    expect(
+      (await db.select(db.dbOutboxMessages).getSingle()).subject,
+      'v3 draft',
+    );
+    expect(
+      await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'db_inbox_notification_states'",
+          )
+          .get(),
+      isNotEmpty,
+    );
+    await db
+        .into(db.dbInboxNotificationStates)
+        .insert(
+          DbInboxNotificationStatesCompanion.insert(
+            accountId: 'a',
+            uidValidity: const Value(7),
+            lastNotifiedUid: const Value(42),
+            baselineEstablished: const Value(true),
+          ),
+        );
+    expect(
+      (await db.select(db.dbInboxNotificationStates).getSingle())
+          .lastNotifiedUid,
+      42,
+    );
+  });
 
   test('v5 upgrades archive policy and pending copies, then reopens safely', () async {
     final dir = Directory.systemTemp.createTempSync('outbox_migration_v5_');

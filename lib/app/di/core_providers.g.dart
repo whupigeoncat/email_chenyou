@@ -190,7 +190,7 @@ final class AccountCredentialResolverProvider
 }
 
 String _$accountCredentialResolverHash() =>
-    r'deca4118e0198c41894f76d821c1d4bf9eb7b2b5';
+    r'b657dfda9baec5aebc071e9323b2b36fa93e850d';
 
 @ProviderFor(imapSessionFactory)
 final imapSessionFactoryProvider = ImapSessionFactoryProvider._();

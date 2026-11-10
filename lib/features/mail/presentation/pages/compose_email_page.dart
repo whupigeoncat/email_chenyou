@@ -14,6 +14,7 @@ import '../../domain/services/compose_draft_factory.dart';
 import '../../domain/usecases/outbox_usecases.dart';
 import '../providers/mail_providers.dart';
 import '../widgets/account_color_badge.dart';
+import '../services/compose_route_guard.dart';
 
 enum _ComposeViewMode { plain, html }
 
@@ -63,6 +64,7 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
   bool _sending = false;
   String? _error;
   String? _recipientError;
+  final Object _routeGuardToken = Object();
 
   bool get _busy => _saving || _sending;
 
@@ -71,37 +73,38 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
     super.initState();
     _draftId = widget.draftId;
     final factory = ComposeDraftFactory();
-    _initialDraft = widget.draft ??
+    _initialDraft =
+        widget.draft ??
         (widget.originEmail != null && widget.account != null
             ? switch (widget.mode) {
                 ComposeMode.reply => factory.reply(
-                    account: widget.account!,
-                    original: widget.originEmail!,
-                  ),
+                  account: widget.account!,
+                  original: widget.originEmail!,
+                ),
                 ComposeMode.replyAll => factory.reply(
-                    account: widget.account!,
-                    original: widget.originEmail!,
-                    replyAll: true,
-                  ),
+                  account: widget.account!,
+                  original: widget.originEmail!,
+                  replyAll: true,
+                ),
                 ComposeMode.forward => factory.forwardShell(
-                    account: widget.account!,
-                    original: widget.originEmail!,
-                  ),
+                  account: widget.account!,
+                  original: widget.originEmail!,
+                ),
                 ComposeMode.newMail => factory.newMail(
-                    account: widget.account!,
-                  ),
+                  account: widget.account!,
+                ),
               }
             : widget.account != null
-                ? factory.newMail(account: widget.account!)
-                : const ComposeDraft(
-                    accountId: '',
-                    mode: ComposeMode.newMail,
-                    to: [],
-                    cc: [],
-                    bcc: [],
-                    subject: '',
-                    plainBody: '',
-                  ));
+            ? factory.newMail(account: widget.account!)
+            : const ComposeDraft(
+                accountId: '',
+                mode: ComposeMode.newMail,
+                to: [],
+                cc: [],
+                bcc: [],
+                subject: '',
+                plainBody: '',
+              ));
     _selectedAccountId = _initialDraft.accountId.isEmpty
         ? widget.account?.id
         : _initialDraft.accountId;
@@ -135,6 +138,7 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
 
   @override
   void dispose() {
+    ComposeRouteGuard.remove(_routeGuardToken);
     _subjectController.dispose();
     _plainController.dispose();
     _htmlController.dispose();
@@ -153,6 +157,10 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
     final accounts = ref.watch(accountsProvider);
     final accountList = accounts.value ?? const <MailAccount>[];
     final selectedAccount = _findAccount(accountList);
+    ComposeRouteGuard.setBlocking(
+      _routeGuardToken,
+      _dirty || _busy || _stagingInProgress,
+    );
 
     return PopScope(
       canPop: !_dirty && !_busy && !_stagingInProgress,
@@ -480,9 +488,9 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
                   onChanged: _busy
                       ? null
                       : (value) => setState(() {
-                            _selectedAccountId = value;
-                            _dirty = true;
-                          }),
+                          _selectedAccountId = value;
+                          _dirty = true;
+                        }),
                 ),
         ),
       ],
@@ -571,8 +579,7 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
         if (staged.isNotEmpty) _dirty = true;
         _initialDraft = _initialDraft.copyWith(
           attachments: List<OutgoingAttachment>.unmodifiable(_attachments),
-          missingAttachmentCount:
-              _initialDraft.missingAttachmentCount + failed,
+          missingAttachmentCount: _initialDraft.missingAttachmentCount + failed,
         );
       });
     } finally {
@@ -587,7 +594,9 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
   }
 
   Future<void> _cleanupUnpersistedAttachments() {
-    return ref.read(attachmentStoreProvider).cleanup(
+    return ref
+        .read(attachmentStoreProvider)
+        .cleanup(
           _attachments.where(
             (item) => !_persistedAttachmentPaths.contains(item.localPath),
           ),
@@ -614,8 +623,7 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
   }
 
   Future<void> _removeAttachment(OutgoingAttachment attachment) async {
-    final persisted =
-        _persistedAttachmentPaths.contains(attachment.localPath);
+    final persisted = _persistedAttachmentPaths.contains(attachment.localPath);
     setState(() {
       _attachments.remove(attachment);
       _dirty = true;
@@ -649,11 +657,12 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
     final toResult = _mergeRecipients(_to, _toController.text);
     final ccResult = _mergeRecipients(_cc, _ccController.text);
     final bccResult = _mergeRecipients(_bcc, _bccController.text);
-    _recipientError = <String>[
-      ...toResult.invalid,
-      ...ccResult.invalid,
-      ...bccResult.invalid,
-    ].isEmpty
+    _recipientError =
+        <String>[
+          ...toResult.invalid,
+          ...ccResult.invalid,
+          ...bccResult.invalid,
+        ].isEmpty
         ? null
         : '收件人格式错误：${<String>[...toResult.invalid, ...ccResult.invalid, ...bccResult.invalid].join(', ')}';
     return ComposeDraft(
@@ -669,8 +678,8 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
       plainBody: _plainController.text,
       htmlBody: _viewMode == _ComposeViewMode.html
           ? (_htmlController.text.trim().isEmpty
-              ? _plainToHtml(_plainController.text)
-              : _htmlController.text)
+                ? _plainToHtml(_plainController.text)
+                : _htmlController.text)
           : null,
       attachments: List<OutgoingAttachment>.unmodifiable(_attachments),
     );
@@ -714,10 +723,9 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
       _error = null;
     });
     try {
-      final saved = await ref.read(saveDraftUseCaseProvider).call(
-            draft: draft,
-            id: _draftId,
-          );
+      final saved = await ref
+          .read(saveDraftUseCaseProvider)
+          .call(draft: draft, id: _draftId);
       if (!mounted) return;
       setState(() {
         _saving = false;
@@ -726,9 +734,8 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
         _dirty = false;
         _error = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('草稿已保存')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('草稿已保存')));
     } on AppFailure catch (failure) {
       if (!mounted) return;
       setState(() {
@@ -754,9 +761,7 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
     }
     final draft = _buildDraft(account);
     if (_recipientError != null || draft.to.isEmpty) {
-      setState(
-        () => _error = _recipientError ?? '请至少填写一个有效的收件人地址。',
-      );
+      setState(() => _error = _recipientError ?? '请至少填写一个有效的收件人地址。');
       return;
     }
     setState(() {
@@ -764,10 +769,9 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
       _error = null;
     });
     try {
-      final result = await ref.read(queueAndSendEmailUseCaseProvider).call(
-            draft: draft,
-            id: _draftId,
-          );
+      final result = await ref
+          .read(queueAndSendEmailUseCaseProvider)
+          .call(draft: draft, id: _draftId);
       if (!mounted) return;
       // Always adopt the persisted row id and attachment set, regardless of
       // success/failure/uncertain. A later tap cannot create a second row.
@@ -780,8 +784,7 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
       if (result.status != OutboxStatus.sent) {
         setState(() {
           _error = result.status == OutboxStatus.uncertain
-              ? (result.lastError ??
-                  '邮件投递状态待确认，请到发件箱人工核对后处理。')
+              ? (result.lastError ?? '邮件投递状态待确认，请到发件箱人工核对后处理。')
               : (result.lastError ?? '发送失败，已加入重试队列。');
         });
         return;
@@ -789,9 +792,8 @@ class _ComposeEmailPageState extends ConsumerState<ComposeEmailPage> {
       setState(() {
         _dirty = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('邮件已进入发件队列并完成发送尝试')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('邮件已进入发件队列并完成发送尝试')));
       Navigator.of(context).pop();
     } on OutboxSendException catch (error) {
       if (!mounted) return;

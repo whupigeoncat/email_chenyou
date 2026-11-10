@@ -41,7 +41,7 @@ final class EmailDetailProvider
   }
 }
 
-String _$emailDetailHash() => r'f78bc2828bcbb5a3547d44e5cff1bb04136d39cb';
+String _$emailDetailHash() => r'4e695e3db867ff969fa63dbba9296f6b4885f281';
 
 abstract class _$EmailDetail extends $Notifier<EmailDetailState> {
   EmailDetailState build();

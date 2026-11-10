@@ -226,5 +226,31 @@ void main() {
         'device-refreshed-token-2',
       );
     });
+
+    test('foreground lease guard wraps every credential resolution', () async {
+      final events = <String>[];
+      Future<T> guard<T>(Future<T> Function() action) async {
+        events.add('acquire');
+        try {
+          return await action();
+        } finally {
+          events.add('release');
+        }
+      }
+
+      final storage = InMemorySecureStorageService();
+      final resolver = AccountCredentialResolver(
+        secureStorage: storage,
+        oauthPkceService: FakeOAuthPkceService(),
+        foregroundGuard: guard,
+      );
+      final account = buildTestAccount(email: 'carol@163.com');
+      await storage.savePasswordSecret(account.id, 'auth-code-123');
+
+      final credential = await resolver(account);
+
+      expect((credential as PasswordCredential).secret, 'auth-code-123');
+      expect(events, ['acquire', 'release']);
+    });
   });
 }

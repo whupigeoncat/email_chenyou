@@ -17,6 +17,7 @@ import '../../features/auth/domain/entities/mail_account.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/mail/data/datasources/enough_mail_imap_session.dart';
 import '../../features/mail/domain/services/attachment_picker.dart';
+import '../../features/notifications/data/battery_notification_platform.dart';
 
 part 'core_providers.g.dart';
 
@@ -44,6 +45,7 @@ AccountCredentialResolver accountCredentialResolver(Ref ref) {
   return AccountCredentialResolver(
     secureStorage: ref.watch(secureStorageServiceProvider),
     oauthPkceService: ref.watch(oauthPkceServiceProvider),
+    foregroundGuard: BatteryNotificationPlatform.instance.withForegroundLease,
   );
 }
 

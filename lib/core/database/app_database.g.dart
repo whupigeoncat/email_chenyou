@@ -4525,6 +4525,575 @@ class DbOutboxMessagesCompanion extends UpdateCompanion<DbOutboxMessage> {
   }
 }
 
+class $DbInboxNotificationStatesTable extends DbInboxNotificationStates
+    with TableInfo<$DbInboxNotificationStatesTable, DbInboxNotificationState> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbInboxNotificationStatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES db_accounts (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _uidValidityMeta = const VerificationMeta(
+    'uidValidity',
+  );
+  @override
+  late final GeneratedColumn<int> uidValidity = GeneratedColumn<int>(
+    'uid_validity',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastNotifiedUidMeta = const VerificationMeta(
+    'lastNotifiedUid',
+  );
+  @override
+  late final GeneratedColumn<int> lastNotifiedUid = GeneratedColumn<int>(
+    'last_notified_uid',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _baselineEstablishedMeta =
+      const VerificationMeta('baselineEstablished');
+  @override
+  late final GeneratedColumn<bool> baselineEstablished = GeneratedColumn<bool>(
+    'baseline_established',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("baseline_established" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _lastCheckedAtMeta = const VerificationMeta(
+    'lastCheckedAt',
+  );
+  @override
+  late final GeneratedColumn<int> lastCheckedAt = GeneratedColumn<int>(
+    'last_checked_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _failureCountMeta = const VerificationMeta(
+    'failureCount',
+  );
+  @override
+  late final GeneratedColumn<int> failureCount = GeneratedColumn<int>(
+    'failure_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _nextRetryAtMeta = const VerificationMeta(
+    'nextRetryAt',
+  );
+  @override
+  late final GeneratedColumn<int> nextRetryAt = GeneratedColumn<int>(
+    'next_retry_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastErrorKindMeta = const VerificationMeta(
+    'lastErrorKind',
+  );
+  @override
+  late final GeneratedColumn<String> lastErrorKind = GeneratedColumn<String>(
+    'last_error_kind',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    accountId,
+    uidValidity,
+    lastNotifiedUid,
+    baselineEstablished,
+    lastCheckedAt,
+    failureCount,
+    nextRetryAt,
+    lastErrorKind,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_inbox_notification_states';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbInboxNotificationState> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('uid_validity')) {
+      context.handle(
+        _uidValidityMeta,
+        uidValidity.isAcceptableOrUnknown(
+          data['uid_validity']!,
+          _uidValidityMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_notified_uid')) {
+      context.handle(
+        _lastNotifiedUidMeta,
+        lastNotifiedUid.isAcceptableOrUnknown(
+          data['last_notified_uid']!,
+          _lastNotifiedUidMeta,
+        ),
+      );
+    }
+    if (data.containsKey('baseline_established')) {
+      context.handle(
+        _baselineEstablishedMeta,
+        baselineEstablished.isAcceptableOrUnknown(
+          data['baseline_established']!,
+          _baselineEstablishedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_checked_at')) {
+      context.handle(
+        _lastCheckedAtMeta,
+        lastCheckedAt.isAcceptableOrUnknown(
+          data['last_checked_at']!,
+          _lastCheckedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('failure_count')) {
+      context.handle(
+        _failureCountMeta,
+        failureCount.isAcceptableOrUnknown(
+          data['failure_count']!,
+          _failureCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('next_retry_at')) {
+      context.handle(
+        _nextRetryAtMeta,
+        nextRetryAt.isAcceptableOrUnknown(
+          data['next_retry_at']!,
+          _nextRetryAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_error_kind')) {
+      context.handle(
+        _lastErrorKindMeta,
+        lastErrorKind.isAcceptableOrUnknown(
+          data['last_error_kind']!,
+          _lastErrorKindMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {accountId};
+  @override
+  DbInboxNotificationState map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbInboxNotificationState(
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      uidValidity: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}uid_validity'],
+      ),
+      lastNotifiedUid: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_notified_uid'],
+      )!,
+      baselineEstablished: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}baseline_established'],
+      )!,
+      lastCheckedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_checked_at'],
+      ),
+      failureCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}failure_count'],
+      )!,
+      nextRetryAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}next_retry_at'],
+      ),
+      lastErrorKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error_kind'],
+      ),
+    );
+  }
+
+  @override
+  $DbInboxNotificationStatesTable createAlias(String alias) {
+    return $DbInboxNotificationStatesTable(attachedDatabase, alias);
+  }
+}
+
+class DbInboxNotificationState extends DataClass
+    implements Insertable<DbInboxNotificationState> {
+  final String accountId;
+  final int? uidValidity;
+  final int lastNotifiedUid;
+  final bool baselineEstablished;
+  final int? lastCheckedAt;
+  final int failureCount;
+  final int? nextRetryAt;
+  final String? lastErrorKind;
+  const DbInboxNotificationState({
+    required this.accountId,
+    this.uidValidity,
+    required this.lastNotifiedUid,
+    required this.baselineEstablished,
+    this.lastCheckedAt,
+    required this.failureCount,
+    this.nextRetryAt,
+    this.lastErrorKind,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['account_id'] = Variable<String>(accountId);
+    if (!nullToAbsent || uidValidity != null) {
+      map['uid_validity'] = Variable<int>(uidValidity);
+    }
+    map['last_notified_uid'] = Variable<int>(lastNotifiedUid);
+    map['baseline_established'] = Variable<bool>(baselineEstablished);
+    if (!nullToAbsent || lastCheckedAt != null) {
+      map['last_checked_at'] = Variable<int>(lastCheckedAt);
+    }
+    map['failure_count'] = Variable<int>(failureCount);
+    if (!nullToAbsent || nextRetryAt != null) {
+      map['next_retry_at'] = Variable<int>(nextRetryAt);
+    }
+    if (!nullToAbsent || lastErrorKind != null) {
+      map['last_error_kind'] = Variable<String>(lastErrorKind);
+    }
+    return map;
+  }
+
+  DbInboxNotificationStatesCompanion toCompanion(bool nullToAbsent) {
+    return DbInboxNotificationStatesCompanion(
+      accountId: Value(accountId),
+      uidValidity: uidValidity == null && nullToAbsent
+          ? const Value.absent()
+          : Value(uidValidity),
+      lastNotifiedUid: Value(lastNotifiedUid),
+      baselineEstablished: Value(baselineEstablished),
+      lastCheckedAt: lastCheckedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastCheckedAt),
+      failureCount: Value(failureCount),
+      nextRetryAt: nextRetryAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextRetryAt),
+      lastErrorKind: lastErrorKind == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastErrorKind),
+    );
+  }
+
+  factory DbInboxNotificationState.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbInboxNotificationState(
+      accountId: serializer.fromJson<String>(json['accountId']),
+      uidValidity: serializer.fromJson<int?>(json['uidValidity']),
+      lastNotifiedUid: serializer.fromJson<int>(json['lastNotifiedUid']),
+      baselineEstablished: serializer.fromJson<bool>(
+        json['baselineEstablished'],
+      ),
+      lastCheckedAt: serializer.fromJson<int?>(json['lastCheckedAt']),
+      failureCount: serializer.fromJson<int>(json['failureCount']),
+      nextRetryAt: serializer.fromJson<int?>(json['nextRetryAt']),
+      lastErrorKind: serializer.fromJson<String?>(json['lastErrorKind']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'accountId': serializer.toJson<String>(accountId),
+      'uidValidity': serializer.toJson<int?>(uidValidity),
+      'lastNotifiedUid': serializer.toJson<int>(lastNotifiedUid),
+      'baselineEstablished': serializer.toJson<bool>(baselineEstablished),
+      'lastCheckedAt': serializer.toJson<int?>(lastCheckedAt),
+      'failureCount': serializer.toJson<int>(failureCount),
+      'nextRetryAt': serializer.toJson<int?>(nextRetryAt),
+      'lastErrorKind': serializer.toJson<String?>(lastErrorKind),
+    };
+  }
+
+  DbInboxNotificationState copyWith({
+    String? accountId,
+    Value<int?> uidValidity = const Value.absent(),
+    int? lastNotifiedUid,
+    bool? baselineEstablished,
+    Value<int?> lastCheckedAt = const Value.absent(),
+    int? failureCount,
+    Value<int?> nextRetryAt = const Value.absent(),
+    Value<String?> lastErrorKind = const Value.absent(),
+  }) => DbInboxNotificationState(
+    accountId: accountId ?? this.accountId,
+    uidValidity: uidValidity.present ? uidValidity.value : this.uidValidity,
+    lastNotifiedUid: lastNotifiedUid ?? this.lastNotifiedUid,
+    baselineEstablished: baselineEstablished ?? this.baselineEstablished,
+    lastCheckedAt: lastCheckedAt.present
+        ? lastCheckedAt.value
+        : this.lastCheckedAt,
+    failureCount: failureCount ?? this.failureCount,
+    nextRetryAt: nextRetryAt.present ? nextRetryAt.value : this.nextRetryAt,
+    lastErrorKind: lastErrorKind.present
+        ? lastErrorKind.value
+        : this.lastErrorKind,
+  );
+  DbInboxNotificationState copyWithCompanion(
+    DbInboxNotificationStatesCompanion data,
+  ) {
+    return DbInboxNotificationState(
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      uidValidity: data.uidValidity.present
+          ? data.uidValidity.value
+          : this.uidValidity,
+      lastNotifiedUid: data.lastNotifiedUid.present
+          ? data.lastNotifiedUid.value
+          : this.lastNotifiedUid,
+      baselineEstablished: data.baselineEstablished.present
+          ? data.baselineEstablished.value
+          : this.baselineEstablished,
+      lastCheckedAt: data.lastCheckedAt.present
+          ? data.lastCheckedAt.value
+          : this.lastCheckedAt,
+      failureCount: data.failureCount.present
+          ? data.failureCount.value
+          : this.failureCount,
+      nextRetryAt: data.nextRetryAt.present
+          ? data.nextRetryAt.value
+          : this.nextRetryAt,
+      lastErrorKind: data.lastErrorKind.present
+          ? data.lastErrorKind.value
+          : this.lastErrorKind,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbInboxNotificationState(')
+          ..write('accountId: $accountId, ')
+          ..write('uidValidity: $uidValidity, ')
+          ..write('lastNotifiedUid: $lastNotifiedUid, ')
+          ..write('baselineEstablished: $baselineEstablished, ')
+          ..write('lastCheckedAt: $lastCheckedAt, ')
+          ..write('failureCount: $failureCount, ')
+          ..write('nextRetryAt: $nextRetryAt, ')
+          ..write('lastErrorKind: $lastErrorKind')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    accountId,
+    uidValidity,
+    lastNotifiedUid,
+    baselineEstablished,
+    lastCheckedAt,
+    failureCount,
+    nextRetryAt,
+    lastErrorKind,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbInboxNotificationState &&
+          other.accountId == this.accountId &&
+          other.uidValidity == this.uidValidity &&
+          other.lastNotifiedUid == this.lastNotifiedUid &&
+          other.baselineEstablished == this.baselineEstablished &&
+          other.lastCheckedAt == this.lastCheckedAt &&
+          other.failureCount == this.failureCount &&
+          other.nextRetryAt == this.nextRetryAt &&
+          other.lastErrorKind == this.lastErrorKind);
+}
+
+class DbInboxNotificationStatesCompanion
+    extends UpdateCompanion<DbInboxNotificationState> {
+  final Value<String> accountId;
+  final Value<int?> uidValidity;
+  final Value<int> lastNotifiedUid;
+  final Value<bool> baselineEstablished;
+  final Value<int?> lastCheckedAt;
+  final Value<int> failureCount;
+  final Value<int?> nextRetryAt;
+  final Value<String?> lastErrorKind;
+  final Value<int> rowid;
+  const DbInboxNotificationStatesCompanion({
+    this.accountId = const Value.absent(),
+    this.uidValidity = const Value.absent(),
+    this.lastNotifiedUid = const Value.absent(),
+    this.baselineEstablished = const Value.absent(),
+    this.lastCheckedAt = const Value.absent(),
+    this.failureCount = const Value.absent(),
+    this.nextRetryAt = const Value.absent(),
+    this.lastErrorKind = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbInboxNotificationStatesCompanion.insert({
+    required String accountId,
+    this.uidValidity = const Value.absent(),
+    this.lastNotifiedUid = const Value.absent(),
+    this.baselineEstablished = const Value.absent(),
+    this.lastCheckedAt = const Value.absent(),
+    this.failureCount = const Value.absent(),
+    this.nextRetryAt = const Value.absent(),
+    this.lastErrorKind = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : accountId = Value(accountId);
+  static Insertable<DbInboxNotificationState> custom({
+    Expression<String>? accountId,
+    Expression<int>? uidValidity,
+    Expression<int>? lastNotifiedUid,
+    Expression<bool>? baselineEstablished,
+    Expression<int>? lastCheckedAt,
+    Expression<int>? failureCount,
+    Expression<int>? nextRetryAt,
+    Expression<String>? lastErrorKind,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (accountId != null) 'account_id': accountId,
+      if (uidValidity != null) 'uid_validity': uidValidity,
+      if (lastNotifiedUid != null) 'last_notified_uid': lastNotifiedUid,
+      if (baselineEstablished != null)
+        'baseline_established': baselineEstablished,
+      if (lastCheckedAt != null) 'last_checked_at': lastCheckedAt,
+      if (failureCount != null) 'failure_count': failureCount,
+      if (nextRetryAt != null) 'next_retry_at': nextRetryAt,
+      if (lastErrorKind != null) 'last_error_kind': lastErrorKind,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbInboxNotificationStatesCompanion copyWith({
+    Value<String>? accountId,
+    Value<int?>? uidValidity,
+    Value<int>? lastNotifiedUid,
+    Value<bool>? baselineEstablished,
+    Value<int?>? lastCheckedAt,
+    Value<int>? failureCount,
+    Value<int?>? nextRetryAt,
+    Value<String?>? lastErrorKind,
+    Value<int>? rowid,
+  }) {
+    return DbInboxNotificationStatesCompanion(
+      accountId: accountId ?? this.accountId,
+      uidValidity: uidValidity ?? this.uidValidity,
+      lastNotifiedUid: lastNotifiedUid ?? this.lastNotifiedUid,
+      baselineEstablished: baselineEstablished ?? this.baselineEstablished,
+      lastCheckedAt: lastCheckedAt ?? this.lastCheckedAt,
+      failureCount: failureCount ?? this.failureCount,
+      nextRetryAt: nextRetryAt ?? this.nextRetryAt,
+      lastErrorKind: lastErrorKind ?? this.lastErrorKind,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (uidValidity.present) {
+      map['uid_validity'] = Variable<int>(uidValidity.value);
+    }
+    if (lastNotifiedUid.present) {
+      map['last_notified_uid'] = Variable<int>(lastNotifiedUid.value);
+    }
+    if (baselineEstablished.present) {
+      map['baseline_established'] = Variable<bool>(baselineEstablished.value);
+    }
+    if (lastCheckedAt.present) {
+      map['last_checked_at'] = Variable<int>(lastCheckedAt.value);
+    }
+    if (failureCount.present) {
+      map['failure_count'] = Variable<int>(failureCount.value);
+    }
+    if (nextRetryAt.present) {
+      map['next_retry_at'] = Variable<int>(nextRetryAt.value);
+    }
+    if (lastErrorKind.present) {
+      map['last_error_kind'] = Variable<String>(lastErrorKind.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbInboxNotificationStatesCompanion(')
+          ..write('accountId: $accountId, ')
+          ..write('uidValidity: $uidValidity, ')
+          ..write('lastNotifiedUid: $lastNotifiedUid, ')
+          ..write('baselineEstablished: $baselineEstablished, ')
+          ..write('lastCheckedAt: $lastCheckedAt, ')
+          ..write('failureCount: $failureCount, ')
+          ..write('nextRetryAt: $nextRetryAt, ')
+          ..write('lastErrorKind: $lastErrorKind, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4538,6 +5107,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DbOutboxMessagesTable dbOutboxMessages = $DbOutboxMessagesTable(
     this,
   );
+  late final $DbInboxNotificationStatesTable dbInboxNotificationStates =
+      $DbInboxNotificationStatesTable(this);
   late final Index idxFoldersRoleAccount = Index(
     'idx_folders_role_account',
     'CREATE INDEX idx_folders_role_account ON db_folders (role, account_id)',
@@ -4585,6 +5156,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     dbAttachments,
     dbTrustedSenders,
     dbOutboxMessages,
+    dbInboxNotificationStates,
     idxFoldersRoleAccount,
     idxEmailsFolderSent,
     idxEmailsSentAt,
@@ -4631,6 +5203,15 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('db_outbox_messages', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'db_accounts',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [
+        TableUpdate('db_inbox_notification_states', kind: UpdateKind.delete),
+      ],
     ),
   ]);
 }
@@ -4727,6 +5308,31 @@ final class $$DbAccountsTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _dbOutboxMessagesRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $DbInboxNotificationStatesTable,
+    List<DbInboxNotificationState>
+  >
+  _dbInboxNotificationStatesRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.dbInboxNotificationStates,
+        aliasName: 'db_accounts__id__db_inbox_notification_states__account_id',
+      );
+
+  $$DbInboxNotificationStatesTableProcessedTableManager
+  get dbInboxNotificationStatesRefs {
+    final manager = $$DbInboxNotificationStatesTableTableManager(
+      $_db,
+      $_db.dbInboxNotificationStates,
+    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbInboxNotificationStatesRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -4890,6 +5496,33 @@ class $$DbAccountsTableFilterComposer
                 $removeJoinBuilderFromRootComposer,
           ),
     );
+    return f(composer);
+  }
+
+  Expression<bool> dbInboxNotificationStatesRefs(
+    Expression<bool> Function($$DbInboxNotificationStatesTableFilterComposer f)
+    f,
+  ) {
+    final $$DbInboxNotificationStatesTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.dbInboxNotificationStates,
+          getReferencedColumn: (t) => t.accountId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbInboxNotificationStatesTableFilterComposer(
+                $db: $db,
+                $table: $db.dbInboxNotificationStates,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 }
@@ -5119,6 +5752,33 @@ class $$DbAccountsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> dbInboxNotificationStatesRefs<T extends Object>(
+    Expression<T> Function($$DbInboxNotificationStatesTableAnnotationComposer a)
+    f,
+  ) {
+    final $$DbInboxNotificationStatesTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.dbInboxNotificationStates,
+          getReferencedColumn: (t) => t.accountId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbInboxNotificationStatesTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbInboxNotificationStates,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$DbAccountsTableTableManager
@@ -5138,6 +5798,7 @@ class $$DbAccountsTableTableManager
             bool dbFoldersRefs,
             bool dbEmailsRefs,
             bool dbOutboxMessagesRefs,
+            bool dbInboxNotificationStatesRefs,
           })
         > {
   $$DbAccountsTableTableManager(_$AppDatabase db, $DbAccountsTable table)
@@ -5236,6 +5897,7 @@ class $$DbAccountsTableTableManager
                 dbFoldersRefs = false,
                 dbEmailsRefs = false,
                 dbOutboxMessagesRefs = false,
+                dbInboxNotificationStatesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -5243,6 +5905,8 @@ class $$DbAccountsTableTableManager
                     if (dbFoldersRefs) db.dbFolders,
                     if (dbEmailsRefs) db.dbEmails,
                     if (dbOutboxMessagesRefs) db.dbOutboxMessages,
+                    if (dbInboxNotificationStatesRefs)
+                      db.dbInboxNotificationStates,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -5307,6 +5971,26 @@ class $$DbAccountsTableTableManager
                           referencedColumn: 'account_id',
                           typedResults: items,
                         ),
+                      if (dbInboxNotificationStatesRefs)
+                        await $_getPrefetchedDataByColumns<
+                          DbAccount,
+                          $DbAccountsTable,
+                          DbInboxNotificationState,
+                          $DbInboxNotificationStatesTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DbAccountsTableReferences
+                              ._dbInboxNotificationStatesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbAccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbInboxNotificationStatesRefs,
+                          currentColumn: 'id',
+                          referencedColumn: 'account_id',
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -5331,6 +6015,7 @@ typedef $$DbAccountsTableProcessedTableManager =
         bool dbFoldersRefs,
         bool dbEmailsRefs,
         bool dbOutboxMessagesRefs,
+        bool dbInboxNotificationStatesRefs,
       })
     >;
 typedef $$DbFoldersTableCreateCompanionBuilder = DbFoldersCompanion Function({
@@ -7795,6 +8480,420 @@ typedef $$DbOutboxMessagesTableProcessedTableManager =
       DbOutboxMessage,
       PrefetchHooks Function({bool accountId})
     >;
+typedef $$DbInboxNotificationStatesTableCreateCompanionBuilder =
+    DbInboxNotificationStatesCompanion Function({
+      required String accountId,
+      Value<int?> uidValidity,
+      Value<int> lastNotifiedUid,
+      Value<bool> baselineEstablished,
+      Value<int?> lastCheckedAt,
+      Value<int> failureCount,
+      Value<int?> nextRetryAt,
+      Value<String?> lastErrorKind,
+      Value<int> rowid,
+    });
+typedef $$DbInboxNotificationStatesTableUpdateCompanionBuilder =
+    DbInboxNotificationStatesCompanion Function({
+      Value<String> accountId,
+      Value<int?> uidValidity,
+      Value<int> lastNotifiedUid,
+      Value<bool> baselineEstablished,
+      Value<int?> lastCheckedAt,
+      Value<int> failureCount,
+      Value<int?> nextRetryAt,
+      Value<String?> lastErrorKind,
+      Value<int> rowid,
+    });
+
+final class $$DbInboxNotificationStatesTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $DbInboxNotificationStatesTable,
+          DbInboxNotificationState
+        > {
+  $$DbInboxNotificationStatesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbAccountsTable _accountIdTable(_$AppDatabase db) => db.dbAccounts
+      .createAlias('db_inbox_notification_states__account_id__db_accounts__id');
+
+  $$DbAccountsTableProcessedTableManager get accountId {
+    final $_column = $_itemColumn<String>('account_id')!;
+
+    final manager = $$DbAccountsTableTableManager(
+      $_db,
+      $_db.dbAccounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_accountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DbInboxNotificationStatesTableFilterComposer
+    extends Composer<_$AppDatabase, $DbInboxNotificationStatesTable> {
+  $$DbInboxNotificationStatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get uidValidity => $composableBuilder(
+    column: $table.uidValidity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastNotifiedUid => $composableBuilder(
+    column: $table.lastNotifiedUid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get baselineEstablished => $composableBuilder(
+    column: $table.baselineEstablished,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastCheckedAt => $composableBuilder(
+    column: $table.lastCheckedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get failureCount => $composableBuilder(
+    column: $table.failureCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nextRetryAt => $composableBuilder(
+    column: $table.nextRetryAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastErrorKind => $composableBuilder(
+    column: $table.lastErrorKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DbAccountsTableFilterComposer get accountId {
+    final $$DbAccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.dbAccounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbAccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.dbAccounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbInboxNotificationStatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $DbInboxNotificationStatesTable> {
+  $$DbInboxNotificationStatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get uidValidity => $composableBuilder(
+    column: $table.uidValidity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastNotifiedUid => $composableBuilder(
+    column: $table.lastNotifiedUid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get baselineEstablished => $composableBuilder(
+    column: $table.baselineEstablished,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastCheckedAt => $composableBuilder(
+    column: $table.lastCheckedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get failureCount => $composableBuilder(
+    column: $table.failureCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nextRetryAt => $composableBuilder(
+    column: $table.nextRetryAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastErrorKind => $composableBuilder(
+    column: $table.lastErrorKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DbAccountsTableOrderingComposer get accountId {
+    final $$DbAccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.dbAccounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbAccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.dbAccounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbInboxNotificationStatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DbInboxNotificationStatesTable> {
+  $$DbInboxNotificationStatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get uidValidity => $composableBuilder(
+    column: $table.uidValidity,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastNotifiedUid => $composableBuilder(
+    column: $table.lastNotifiedUid,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get baselineEstablished => $composableBuilder(
+    column: $table.baselineEstablished,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastCheckedAt => $composableBuilder(
+    column: $table.lastCheckedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get failureCount => $composableBuilder(
+    column: $table.failureCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nextRetryAt => $composableBuilder(
+    column: $table.nextRetryAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastErrorKind => $composableBuilder(
+    column: $table.lastErrorKind,
+    builder: (column) => column,
+  );
+
+  $$DbAccountsTableAnnotationComposer get accountId {
+    final $$DbAccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.dbAccounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbAccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dbAccounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbInboxNotificationStatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DbInboxNotificationStatesTable,
+          DbInboxNotificationState,
+          $$DbInboxNotificationStatesTableFilterComposer,
+          $$DbInboxNotificationStatesTableOrderingComposer,
+          $$DbInboxNotificationStatesTableAnnotationComposer,
+          $$DbInboxNotificationStatesTableCreateCompanionBuilder,
+          $$DbInboxNotificationStatesTableUpdateCompanionBuilder,
+          (
+            DbInboxNotificationState,
+            $$DbInboxNotificationStatesTableReferences,
+          ),
+          DbInboxNotificationState,
+          PrefetchHooks Function({bool accountId})
+        > {
+  $$DbInboxNotificationStatesTableTableManager(
+    _$AppDatabase db,
+    $DbInboxNotificationStatesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbInboxNotificationStatesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbInboxNotificationStatesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbInboxNotificationStatesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> accountId = const Value.absent(),
+                Value<int?> uidValidity = const Value.absent(),
+                Value<int> lastNotifiedUid = const Value.absent(),
+                Value<bool> baselineEstablished = const Value.absent(),
+                Value<int?> lastCheckedAt = const Value.absent(),
+                Value<int> failureCount = const Value.absent(),
+                Value<int?> nextRetryAt = const Value.absent(),
+                Value<String?> lastErrorKind = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbInboxNotificationStatesCompanion(
+                accountId: accountId,
+                uidValidity: uidValidity,
+                lastNotifiedUid: lastNotifiedUid,
+                baselineEstablished: baselineEstablished,
+                lastCheckedAt: lastCheckedAt,
+                failureCount: failureCount,
+                nextRetryAt: nextRetryAt,
+                lastErrorKind: lastErrorKind,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String accountId,
+                Value<int?> uidValidity = const Value.absent(),
+                Value<int> lastNotifiedUid = const Value.absent(),
+                Value<bool> baselineEstablished = const Value.absent(),
+                Value<int?> lastCheckedAt = const Value.absent(),
+                Value<int> failureCount = const Value.absent(),
+                Value<int?> nextRetryAt = const Value.absent(),
+                Value<String?> lastErrorKind = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbInboxNotificationStatesCompanion.insert(
+                accountId: accountId,
+                uidValidity: uidValidity,
+                lastNotifiedUid: lastNotifiedUid,
+                baselineEstablished: baselineEstablished,
+                lastCheckedAt: lastCheckedAt,
+                failureCount: failureCount,
+                nextRetryAt: nextRetryAt,
+                lastErrorKind: lastErrorKind,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $DbInboxNotificationStatesTable,
+                    DbInboxNotificationState
+                  >(table),
+                  $$DbInboxNotificationStatesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({accountId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (accountId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.accountId,
+                        referencedTable:
+                            $$DbInboxNotificationStatesTableReferences
+                                ._accountIdTable(db),
+                        referencedColumn:
+                            $$DbInboxNotificationStatesTableReferences
+                                ._accountIdTable(db)
+                                .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbInboxNotificationStatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DbInboxNotificationStatesTable,
+      DbInboxNotificationState,
+      $$DbInboxNotificationStatesTableFilterComposer,
+      $$DbInboxNotificationStatesTableOrderingComposer,
+      $$DbInboxNotificationStatesTableAnnotationComposer,
+      $$DbInboxNotificationStatesTableCreateCompanionBuilder,
+      $$DbInboxNotificationStatesTableUpdateCompanionBuilder,
+      (DbInboxNotificationState, $$DbInboxNotificationStatesTableReferences),
+      DbInboxNotificationState,
+      PrefetchHooks Function({bool accountId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7811,4 +8910,9 @@ class $AppDatabaseManager {
       $$DbTrustedSendersTableTableManager(_db, _db.dbTrustedSenders);
   $$DbOutboxMessagesTableTableManager get dbOutboxMessages =>
       $$DbOutboxMessagesTableTableManager(_db, _db.dbOutboxMessages);
+  $$DbInboxNotificationStatesTableTableManager get dbInboxNotificationStates =>
+      $$DbInboxNotificationStatesTableTableManager(
+        _db,
+        _db.dbInboxNotificationStates,
+      );
 }

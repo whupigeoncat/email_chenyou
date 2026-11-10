@@ -184,6 +184,21 @@ class RemoteMailboxStatus {
   final int? highestModSeq;
 }
 
+/// Lightweight UID-only result for background new-mail checks.
+///
+/// Implementations use UID SEARCH, never ENVELOPE/BODYSTRUCTURE/BODY[], so a
+/// long offline gap cannot download thousands of message headers.
+class RemoteNewMailSearch {
+  const RemoteNewMailSearch({required this.allUids, required this.unseenUids});
+
+  const RemoteNewMailSearch.empty()
+    : allUids = const <int>[],
+      unseenUids = const <int>[];
+
+  final List<int> allUids;
+  final List<int> unseenUids;
+}
+
 /// Abstract IMAP session interface decoupling `ConnectionPool` from `enough_mail`
 /// so lifecycle invariants can be thoroughly unit-tested without live sockets.
 abstract interface class ImapSession {
@@ -232,6 +247,10 @@ abstract interface class ImapSession {
 
   /// Returns flags for existing requested UIDs; missing UIDs have vanished.
   Future<Map<int, List<String>>> uidFetchFlags(List<int> uids);
+
+  /// UID-only search for background notifications. Must not fetch envelopes,
+  /// bodies or attachment structure. [fromUid] is inclusive.
+  Future<RemoteNewMailSearch> searchNewMailUids({required int fromUid});
 
   Future<bool> containsMessageId(String messageId);
 

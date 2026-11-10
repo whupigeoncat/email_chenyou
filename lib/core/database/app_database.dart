@@ -149,6 +149,28 @@ class DbOutboxMessages extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+/// Per-account high-water mark for background new-mail notifications.
+///
+/// Kept separate from folder sync state so the headless background check never
+/// has to touch or reinterpret foreground sync data. `uidValidity` and
+/// `lastNotifiedUid` together reject reused UIDs after a server UIDVALIDITY
+/// reset; `baselineEstablished` prevents notifying history on the first run.
+class DbInboxNotificationStates extends Table {
+  TextColumn get accountId =>
+      text().references(DbAccounts, #id, onDelete: KeyAction.cascade)();
+  IntColumn get uidValidity => integer().nullable()();
+  IntColumn get lastNotifiedUid => integer().withDefault(const Constant(0))();
+  BoolColumn get baselineEstablished =>
+      boolean().withDefault(const Constant(false))();
+  IntColumn get lastCheckedAt => integer().nullable()();
+  IntColumn get failureCount => integer().withDefault(const Constant(0))();
+  IntColumn get nextRetryAt => integer().nullable()();
+  TextColumn get lastErrorKind => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {accountId};
+}
+
 @DriftDatabase(
   tables: [
     DbAccounts,
@@ -157,6 +179,7 @@ class DbOutboxMessages extends Table {
     DbAttachments,
     DbTrustedSenders,
     DbOutboxMessages,
+    DbInboxNotificationStates,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -165,7 +188,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -190,6 +213,9 @@ class AppDatabase extends _$AppDatabase {
         await customStatement(
           "UPDATE db_accounts SET save_sent_copy = 1 WHERE provider_type = 'custom'",
         );
+      }
+      if (from < 7) {
+        await m.createTable(dbInboxNotificationStates);
       }
       if (from < 5) {
         await customStatement(

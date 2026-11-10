@@ -58,4 +58,4 @@ final class AppRuntimeProvider
   }
 }
 
-String _$appRuntimeHash() => r'd278f95521c8756791d40887043a4d2a1617174a';
+String _$appRuntimeHash() => r'c50371b1d563079b63865b6aca32798192e42c70';

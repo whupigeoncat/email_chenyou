@@ -41,7 +41,7 @@ final class AccountSetupProvider
   }
 }
 
-String _$accountSetupHash() => r'b79048ab18fcfe4d84aa1df92c2f1bed78fc1527';
+String _$accountSetupHash() => r'f941297c177fd7484d7209dd631f21639c872d15';
 
 abstract class _$AccountSetup extends $Notifier<AccountSetupState> {
   AccountSetupState build();

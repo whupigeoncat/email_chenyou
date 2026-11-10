@@ -14,10 +14,12 @@ import '../../data/repositories/mail_remote_repository.dart';
 import '../../data/repositories/outbox_repository_impl.dart';
 import '../../data/repositories/trusted_senders_repository_impl.dart';
 import '../../data/services/account_sync_bootstrap.dart';
+import '../../data/services/inbox_sync_coordinator.dart';
 import '../../data/services/outbox_queue_service.dart';
 import '../../data/services/sent_copy_service.dart';
+import '../../../notifications/data/foreground_inbox_marker.dart';
+import '../../../notifications/data/inbox_notification_state_store.dart';
 import '../../../../core/logging/sanitized_logger.dart';
-import '../../data/services/inbox_sync_coordinator.dart';
 import '../../domain/entities/local_cache_stats.dart';
 import '../../domain/entities/mail_folder.dart';
 import '../../domain/entities/outbox_message.dart';
@@ -261,6 +263,19 @@ DeleteOutboxMessageUseCase deleteOutboxMessageUseCase(Ref ref) {
 }
 
 @Riverpod(keepAlive: true)
+InboxNotificationStateStore inboxNotificationStateStore(Ref ref) {
+  return InboxNotificationStateStore(database: ref.watch(appDatabaseProvider));
+}
+
+@Riverpod(keepAlive: true)
+ForegroundInboxMarker foregroundInboxMarker(Ref ref) {
+  return ForegroundInboxMarker(
+    database: ref.watch(appDatabaseProvider),
+    stateStore: ref.watch(inboxNotificationStateStoreProvider),
+  );
+}
+
+@Riverpod(keepAlive: true)
 InboxSyncCoordinator inboxSyncCoordinator(Ref ref) {
   final coordinator = InboxSyncCoordinator(
     connectionPool: ref.watch(connectionPoolProvider),
@@ -270,6 +285,9 @@ InboxSyncCoordinator inboxSyncCoordinator(Ref ref) {
           .getAccount(accountId);
       if (account == null || !account.isEnabled) return;
       await ref.read(syncInboxUseCaseProvider).call(account);
+    },
+    notifySynced: (accountId) {
+      return ref.read(foregroundInboxMarkerProvider).markSynced(accountId);
     },
   );
   ref.onDispose(() {

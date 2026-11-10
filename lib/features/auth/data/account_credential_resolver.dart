@@ -10,6 +10,12 @@ import '../../../../core/security/oauth_pkce_service.dart';
 import '../../../../core/security/secure_storage_service.dart';
 import '../domain/entities/mail_account.dart';
 
+/// Runs a resolver/network action under a process-wide foreground lease so the
+/// headless notification job cannot refresh the same token concurrently.
+typedef CredentialResolutionGuard = Future<T> Function<T>(
+  Future<T> Function() action,
+);
+
 /// Resolves an account's secret just-in-time for a new IMAP socket.
 ///
 /// OAuth access tokens are refreshed proactively when they are within the
@@ -22,18 +28,30 @@ class AccountCredentialResolver {
     required SecureStorageService secureStorage,
     required OAuthPkceService oauthPkceService,
     SanitizedLogger? logger,
+    CredentialResolutionGuard? foregroundGuard,
   }) : _secureStorage = secureStorage,
        _oauthPkceService = oauthPkceService,
-       _logger = logger ?? SanitizedLogger.instance;
+       _logger = logger ?? SanitizedLogger.instance,
+       _foregroundGuard = foregroundGuard;
 
   final SecureStorageService _secureStorage;
   final OAuthPkceService _oauthPkceService;
   final SanitizedLogger _logger;
+  final CredentialResolutionGuard? _foregroundGuard;
 
   /// One serialized tail future per account ID.
   final Map<String, Future<void>> _accountLocks = <String, Future<void>>{};
 
-  Future<ResolvedAccountCredential> call(MailAccount account) async {
+  Future<ResolvedAccountCredential> call(MailAccount account) {
+    final guard = _foregroundGuard;
+    if (guard == null) return _resolve(account);
+    // Every foreground dependency (connection pool, outbox retry timers,
+    // manual sync) must use the same native lease. A background job either
+    // never started (UI visible) or is cancelled and awaited here.
+    return guard(() => _resolve(account));
+  }
+
+  Future<ResolvedAccountCredential> _resolve(MailAccount account) async {
     switch (account.authType) {
       case MailAuthType.passwordOrAuthCode:
         return _resolvePassword(account);
