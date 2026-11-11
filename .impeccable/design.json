@@ -350,9 +350,14 @@
         "purpose": "The single selection pill. Interruptible mid-flight; resolves instantly when the OS reports reduced motion."
       },
       {
-        "name": "native-route",
-        "value": "Android PredictiveBackPageTransitionsBuilder; iOS/macOS CupertinoPageTransitionsBuilder",
-        "purpose": "Fuchsia/Linux/Windows use the shared restrained fade and 0.012 vertical offset; platform route timing is retained."
+        "name": "page-liquid-reveal",
+        "value": "420ms enter / 280ms exit; easeInOutCubic; 16 smooth cubic segments",
+        "purpose": "Opaque surface spreads from the recent click to cover the whole page; text stays stationary. One reversible progress function, no separate controller or idle timer. Center fallback and immediate full surface under reduced motion."
+      },
+      {
+        "name": "native-interactive-back",
+        "value": "Cupertino/PredictiveBack builders stay mounted; ordinary primary1/secondary0, actual animation during pop gesture",
+        "purpose": "Retain platform gesture recognition, cancellation and PopScope guards. Expansion clip is disabled for native interactive back; it stays in the same widget ancestry."
       }
     ],
     "breakpoints": [
@@ -450,13 +455,13 @@
   ],
   "narrative": {
     "northStar": "The Klein Current（克莱因流）",
-    "overview": "本地邮箱的视觉系统是一条稳定电流：导航与选择由克莱因蓝承担，阅读表面保持不透明的安静，交互时的主要运动对象是筛选胶囊，静止时不运行装饰动画。页面不靠装饰、模糊或透明度表达“流动”，而靠颜色占比、连续曲率和一个可以被中途改意的弹性位移，让操作读起来像一股不间断的水流。系统的密度是中等偏舒适的：邮件行至少 110dp 高，行距足以扫读发件人、主题与时间；导航、控件与容器共享同一套圆角家族，避免相邻表面出现互不相干的曲率。层次靠实心表面之间的明度差与 1dp 发丝线建立，卡片与列表默认平铺；模态面板沿用 Material 原生抬升，系统没有自定义或装饰性阴影。这套世界同时服务手机与电脑：手机主界面是蓝色头部加一张上圆角的白色阅读面板，其他阅读与设置页面仍使用当前主题的表面色顶栏；电脑是同一语言下的两栏或三栏。栏数改变，配色、字体层级、圆角与控制手感不变。",
+    "overview": "本地邮箱的视觉系统是一条稳定电流：导航与选择由克莱因蓝承担，阅读表面保持不透明的安静，交互时，页面从触点扩散，筛选胶囊连续移动；静止时不运行装饰动画。页面不靠装饰、模糊或透明度表达“流动”，而靠颜色占比、连续曲率和一个可以被中途改意的弹性位移，让操作读起来像一股不间断的水流。系统的密度是中等偏舒适的：邮件行至少 110dp 高，行距足以扫读发件人、主题与时间；导航、控件与容器共享同一套圆角家族，避免相邻表面出现互不相干的曲率。层次靠实心表面之间的明度差与 1dp 发丝线建立，卡片与列表默认平铺；模态面板沿用 Material 原生抬升，系统没有自定义或装饰性阴影。这套世界同时服务手机与电脑：手机主界面是蓝色头部加一张上圆角的白色阅读面板，其他阅读与设置页面仍使用当前主题的表面色顶栏；电脑是同一语言下的两栏或三栏。栏数改变，配色、字体层级、圆角与控制手感不变。",
     "keyCharacteristics": [
       "克莱因蓝只做导航、选择与主操作；大面积留给象牙白/纸白或深夜蓝。",
       "所有承托表面不透明；流动感来自运动与曲率，不来自模糊或半透明。",
       "层级靠字重、字距、明度差与发丝线，不靠多字体家族。",
       "控件圆角来自同一家族（14/18/22/24/28），胶囊是唯一的全圆角。",
-      "唯一的签名动效是筛选胶囊的弹性位移，且可被中断、可被系统“减少动画”即时取消。"
+      "触点扩散负责页面导航，弹性胶囊负责筛选；两者响应减少动画，静止时不运行。"
     ],
     "rules": [
       {
@@ -506,7 +511,7 @@
       "Don't 引入第二品牌色；success/warning/danger 只用于状态，星标与连接状态也不得扩散成大色块。",
       "Don't 为单个组件发明家族外的圆角，或把胶囊圆角用于普通容器。",
       "Don't 在选择动画中缩放、位移或改写标签文字，也不要在静止界面保留装饰性循环动画。",
-      "Don't 覆盖 Android 预测性返回、iOS/macOS 边缘返回手势的时序；只有 Windows/Linux 桌面使用克制的淡入 + 微位移路由。"
+      "Don't 把普通页面跳转改回横向翻页，也不要复制平台私有手势控制器；保留系统返回手势、取消行为和草稿保护。"
     ]
   }
 }

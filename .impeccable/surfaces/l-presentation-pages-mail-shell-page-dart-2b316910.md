@@ -17,7 +17,7 @@ OWN-WORLD: Digital Klein blue #002FA7, ivory #F7F7F2, white #FFFFFF, ink #17213B
 
 STORY: 一眼识别当前邮箱与未读状态，扫描发件人和主题，直接进入阅读、复制验证码或写信。手机用可滚动账户侧栏，电脑保留多栏。
 
-FIRST VIEWPORT: Compact blue toolbar with menu, name, notifications and search; large current inbox title/scope below. White opaque list joins with a 28–30dp upper curve. All/unread pill and sync sit above 4–5 comfortably spaced message rows. Blue compose action is reachable at lower right. Exact count only when truthful. Signature “流线选择”: one interruptible spring pill moves between filters, matched sidebar expansion and subtle press/route shape movement; text stays stable. Reduced motion resolves immediately and idle has no decorative tickers.
+FIRST VIEWPORT: Compact blue toolbar with menu, name, notifications and search; large current inbox title/scope below. White opaque list joins with a 28–30dp upper curve. All/unread pill and sync sit above 4–5 comfortably spaced message rows. Blue compose action is reachable at lower right. Exact count only when truthful. Signature “触点扩散”: full-page navigation expands an opaque organic boundary from the recent tap (420ms in, 280ms out); page text stays stationary. The existing interruptible filter spring and sidebar expansion remain. Native interactive-back gestures retain platform feedback. Reduced motion resolves immediately and idle has no decorative tickers.
 
 FORM: Sixth grounded candidate, music tracklisting translated only into type, palette, density and one signature move; controls and state remain native mail. Code-led, approved blue-flow sketch. SEED REFERENCE seed:8b2e2eae7eb44151. Carry clarity and stable alignment from declined challengers; no borrowed costumes.
 
@@ -26,3 +26,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 ## Boundaries
 
 Keep all existing operations, semantics, stable widget keys where possible, draft guards, lazy lists, safe HTML and non-hybrid Android composition. Keep system theme, 48dp touch targets, large text, keyboard and native return gestures. No protocol/database/auth/background work. No new dependencies, fonts or images required. Related screens share the theme and controls; detail/compose/search/account/settings retain content-first layout.
+
+## Motion refinement — 2026-11-10
+
+User rejected the incumbent native flip/fade after implementation and explicitly requested liquid-like full-screen spreading for every button-triggered page change. Keep the accepted visual world. Focal: opaque point-origin reveal, not glass. Continuity: reverse the same geometry on ordinary pop; cancel native interactive gestures safely. Feedback: no delayed business actions, text remains stationary. Budget: one finite route animation with a 16-segment clip, no custom shader, blur, extra controller, or idle loop; bypass clipping at rest/reduced motion. All full-screen Material routes inherit globally; dialogs and system-owned screens retain their own presentation.

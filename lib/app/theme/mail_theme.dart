@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 import '../motion/mail_motion.dart';
@@ -346,15 +345,12 @@ ThemeData buildMailTheme(Brightness brightness) {
     ),
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: <TargetPlatform, PageTransitionsBuilder>{
-        // Android keeps the platform predictive-back transition; iOS and macOS
-        // keep the native edge-swipe stack. Desktop gets the restrained
-        // blue-flow fade/slide.
-        TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+        TargetPlatform.android: MailPageTransitionsBuilder(),
         TargetPlatform.fuchsia: MailPageTransitionsBuilder(),
         TargetPlatform.linux: MailPageTransitionsBuilder(),
         TargetPlatform.windows: MailPageTransitionsBuilder(),
-        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-        TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.iOS: MailPageTransitionsBuilder(),
+        TargetPlatform.macOS: MailPageTransitionsBuilder(),
       },
     ),
   );
